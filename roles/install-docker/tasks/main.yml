@@ -1,0 +1,24 @@
+# OS 체크
+- name: Check OS ID
+  shell: '. /etc/os-release && echo "$ID"'
+  register: os_id
+  changed_when: false
+
+- name: Check OS version
+  shell: '. /etc/os-release && echo "$VERSION_ID"'
+  register: os_version
+  changed_when: false
+
+- name: Reject unsupported OS
+  fail:
+    msg: "Unsupported OS: {{ os_id.stdout }} {{ os_version.stdout }}. Only [Ubuntu], [Rocky], [RHEL] are available"
+  when: os_id.stdout not in ["ubuntu", "rocky", "rhel"]
+
+- name: Reject unsupported OS version
+  fail:
+    msg: "Unsupported OS version: {{ os_id.stdout }} {{ os_version.stdout }}. Ubuntu supports 22.04, 24.04, 25.10, 26.04 / Rocky,RHEL supports 8, 9, 10."
+  when: >
+    (os_id.stdout == "ubuntu" and os_version.stdout not in ["22.04", "24.04", "25.10", "26.04"]) or
+    (os_id.stdout in ["rocky", "rhel"] and os_version.stdout.split('.')[0] not in ["8", "9", "10"])
+  
+  
