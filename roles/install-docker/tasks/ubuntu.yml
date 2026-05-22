@@ -38,3 +38,85 @@
       - runc
     state: absent
   when: runtime_packages.stdout | default('') != ""
+
+# 도커 설치
+- name: Update apt cache
+  apt:
+    update_cache: true
+
+- name: Install required packages
+  apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+
+- name: Create apt keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Docker's official GPG key
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker apt repository
+  shell: |
+    tee /etc/apt/sources.list.d/docker.sources <<EOF
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  changed_when: true
+
+- name: Update apt cache
+  apt:
+    update_cache: true
+
+# 원하는 설치 버전 선택
+- name: Get available docker-ce versions
+  shell: "apt list --all-versions docker-ce 2>/dev/null | awk '/docker-ce/ {print $2}'"
+  register: docker_available_versions
+  changed_when: false
+
+- name: Show available docker-ce versions
+  debug:
+    msg: "{{ docker_available_versions.stdout_lines }}"
+
+- name: Select Docker version
+  pause:
+    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 5:29.5.2-1 / 그냥 Enter면 최신 버전"
+  register: docker_version_input
+  until: >
+    (docker_version_input.user_input | length == 0) or
+    ((docker_available_versions.stdout_lines
+    | select('search', '^' ~ (docker_version_input.user_input | regex_escape))
+    | list
+    | length) > 0)
+  retries: 999
+
+- name: Set selected Docker version
+  shell: |
+    if [ -z "{{ docker_version_input.user_input }}" ]; then
+      echo "{{ docker_available_versions.stdout_lines[0] }}"
+    else
+      echo "{{ docker_available_versions.stdout }}" | grep -E '^{{ docker_version_input.user_input | regex_escape }}' | head -n 1
+    fi
+  register: selected_docker_version
+  changed_when: false
+
+- name: Install selected Docker version
+  apt:
+    name:
+      - "docker-ce={{ selected_docker_version.stdout }}"
+      - "docker-ce-cli={{ selected_docker_version.stdout }}"
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
