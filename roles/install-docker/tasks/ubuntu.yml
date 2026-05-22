@@ -91,7 +91,7 @@
 
 - name: Select Docker version
   pause:
-    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 5:29.5.2-1 / 그냥 Enter면 최신 버전"
+    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 5:28.5.2 / 그냥 Enter면 최신 버전"
   register: docker_version_input
   until: >
     (docker_version_input.user_input | length == 0) or
