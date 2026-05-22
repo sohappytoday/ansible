@@ -44,4 +44,60 @@
     skip_broken: true
   when: runtime_packages.stdout | default('') != ""
 
-  
+# Docker 설치
+- name: Install dnf plugins
+  dnf:
+    name: dnf-plugins-core
+    state: present
+
+- name: Add Docker repository
+  shell: dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+  changed_when: true
+
+- name: Get available docker-ce versions
+  shell: "dnf list docker-ce --showduplicates | sort -r | awk '/docker-ce/ {print $2}'"
+  register: docker_available_versions
+  changed_when: false
+
+- name: Show available docker-ce versions
+  debug:
+    msg: "{{ docker_available_versions.stdout_lines }}"
+
+# 도커 버전 선택
+- name: Select Docker version
+  pause:
+    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 3:28.5.2-1.el9 / 그냥 Enter면 최신 버전"
+  register: docker_version_input
+  until: >
+    (docker_version_input.user_input | length == 0) or
+    ((docker_available_versions.stdout_lines
+    | select('search', '^' ~ (docker_version_input.user_input | regex_escape))
+    | list
+    | length) > 0)
+  retries: 999
+
+- name: Set selected Docker version
+  shell: |
+    if [ -z "{{ docker_version_input.user_input }}" ]; then
+      echo "{{ docker_available_versions.stdout_lines[0] }}"
+    else
+      echo "{{ docker_available_versions.stdout }}" | grep -E '^{{ docker_version_input.user_input | regex_escape }}' | head -n 1
+    fi
+  register: selected_docker_version
+  changed_when: false
+
+- name: Install selected Docker version
+  dnf:
+    name:
+      - "docker-ce-{{ selected_docker_version.stdout }}"
+      - "docker-ce-cli-{{ selected_docker_version.stdout }}"
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Enable and start Docker
+  systemd:
+    name: docker
+    state: started
+    enabled: true
