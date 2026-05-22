@@ -11,14 +11,123 @@
 
 - name: Reject unsupported OS
   fail:
-    msg: "Unsupported OS: {{ os_id.stdout }} {{ os_version.stdout }}. Only [Ubuntu], [Rocky], [RHEL] are available"
+    msg: "지원하지 않는 OS 입니다. {{ os_id.stdout }} {{ os_version.stdout }}. (가능한 OS 목록 : [Ubuntu], [Rocky], [RHEL])"
   when: os_id.stdout not in ["ubuntu", "rocky", "rhel"]
 
 - name: Reject unsupported OS version
   fail:
-    msg: "Unsupported OS version: {{ os_id.stdout }} {{ os_version.stdout }}. Ubuntu supports 22.04, 24.04, 25.10, 26.04 / Rocky,RHEL supports 8, 9, 10."
+    msg: "지원하지 않는 OS version 입니다.: {{ os_id.stdout }} {{ os_version.stdout }}. (가능한 OS Version 목록 : Ubuntu 22.04, 24.04, 25.10, 26.04 / Rocky,RHEL supports 8, 9, 10)"
   when: >
     (os_id.stdout == "ubuntu" and os_version.stdout not in ["22.04", "24.04", "25.10", "26.04"]) or
     (os_id.stdout in ["rocky", "rhel"] and os_version.stdout.split('.')[0] not in ["8", "9", "10"])
   
+# Architecture
+- name: Check architecture
+  command: uname -m
+  register: architecture
+  changed_when: false
+
+- name: Reject unsupported architecture
+  fail:
+    msg: "지원하지 않는 아키텍쳐입니다. {{ architecture.stdout }}. (가능한 아키텍쳐 목록 :  x86_64/amd64, armhf, arm64/aarch64, s390x, ppc64le/ppc64el)"
+  when: architecture.stdout not in ["x86_64", "amd64", "armhf", "arm64", "aarch64", "s390x", "ppc64le", "ppc64el"]
+
+
+# Ubuntu Container Runtime 정리
+- name: Check container runtime packages (Ubuntu)
+  shell: "dpkg -l | grep -E 'docker|containerd|cri-o|runc' || true"
+  register: runtime_packages_ubuntu
+  changed_when: false
+  when: os_id.stdout == "ubuntu"
+
+- name: Show warning if container runtime exists (Ubuntu)
+  pause:
+    prompt: |
+      이미 설치된 Container Runtime이 있습니다.
+
+      {{ runtime_packages_ubuntu.stdout }}
+
+      이 Container Runtime을 이미 사용하고 있는 컨테이너가 있다면
+      Docker 설치/재시작 과정에서 장애가 발생할 수 있습니다.
+
+      계속 진행하시겠습니까? (yes/no)
+  register: continue_answer_ubuntu
+  when:
+    - os_id.stdout == "ubuntu"
+    - runtime_packages_ubuntu.stdout != ""
   
+- name: Stop if user does not agree (Ubuntu)
+  fail:
+    msg: "Docker 설치를 중단하겠습니다."
+  when:
+    - os_id.stdout == "ubuntu"
+    - runtime_packages_ubuntu.stdout | default('') != ""
+    - continue_answer_ubuntu.user_input | lower not in ["yes", "y"]
+
+- name: Remove container runtime packages (Ubuntu)
+  apt:
+    name:
+      - docker.io
+      - docker-compose
+      - docker-compose-v2
+      - docker-doc
+      - podman-docker
+      - containerd
+      - containerd.io
+      - runc
+    state: absent
+  when:
+    - os_id.stdout == "ubuntu"
+    - runtime_packages_ubuntu.stdout | default('') != ""
+
+# Rocky Container Runtime 정리
+- name: Check container runtime packages (RHEL / Rocky)
+  shell: "rpm -qa | grep -E 'docker|containerd|cri-o|runc' || true"
+  register: runtime_packages_rhel
+  changed_when: false
+  when: os_id.stdout in ["rhel", "rocky"]
+
+- name: Show warning if container runtime exists (RHEL / Rocky)
+  pause:
+    prompt: |
+      이미 설치된 Container Runtime이 있습니다.
+
+      {{ runtime_packages_rhel.stdout }}
+
+      이 Container Runtime을 이미 사용하고 있는 컨테이너가 있다면
+      Docker 설치/재시작 과정에서 장애가 발생할 수 있습니다.
+
+      계속 진행하시겠습니까? (yes/no)
+  register: continue_answer_rhel
+  when:
+    - os_id.stdout in ["rhel", "rocky"]
+    - runtime_packages_rhel.stdout != ""
+
+- name: Stop if user does not agree (RHEL / Rocky)
+  fail:
+    msg: "Docker 설치를 중단하겠습니다."
+  when:
+    - os_id.stdout in ["rhel", "rocky"]
+    - runtime_packages_rhel.stdout | default('') != ""
+    - continue_answer_rhel.user_input | lower not in ["yes", "y"]
+
+- name: Remove container runtime packages (RHEL / Rocky)
+  dnf:
+    name:
+      - docker
+      - docker-client
+      - docker-client-latest
+      - docker-common
+      - docker-latest
+      - docker-latest-logrotate
+      - docker-logrotate
+      - docker-engine
+      - podman
+      - runc
+      - containerd
+      - containerd.io
+    state: absent
+    skip_broken: true
+  when:
+    - os_id.stdout in ["rhel", "rocky"]
+    - runtime_packages_rhel.stdout | default('') != ""
