@@ -120,3 +120,9 @@
       - docker-buildx-plugin
       - docker-compose-plugin
     state: present
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: true
