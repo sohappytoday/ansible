@@ -66,14 +66,11 @@
 # 도커 버전 선택
 - name: Select Docker version
   pause:
-    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 3:28.5.2 / 그냥 Enter면 최신 버전"
+    prompt: "설치할 Docker version 전체를 입력하세요. 예: 3:28.5.2-1.el9 / 그냥 Enter면 최신 버전"
   register: docker_version_input
   until: >
     (docker_version_input.user_input | length == 0) or
-    ((docker_available_versions.stdout_lines
-    | select('search', '^' ~ (docker_version_input.user_input | regex_escape))
-    | list
-    | length) > 0)
+    (docker_version_input.user_input in docker_available_versions.stdout_lines)
   retries: 999
 
 - name: Set selected Docker version

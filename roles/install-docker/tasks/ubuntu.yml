@@ -91,14 +91,11 @@
 
 - name: Select Docker version
   pause:
-    prompt: "설치할 Docker version 앞부분을 입력하세요. 예: 5:28.5.2 / 그냥 Enter면 최신 버전"
+    prompt: "설치할 Docker version 전체를 입력하세요. 예: 5:28.5.2-1~ubuntu.24.04~noble / 그냥 Enter면 최신 버전"
   register: docker_version_input
   until: >
     (docker_version_input.user_input | length == 0) or
-    ((docker_available_versions.stdout_lines
-    | select('search', '^' ~ (docker_version_input.user_input | regex_escape))
-    | list
-    | length) > 0)
+    (docker_version_input.user_input in docker_available_versions.stdout_lines)
   retries: 999
 
 - name: Set selected Docker version
@@ -106,7 +103,7 @@
     if [ -z "{{ docker_version_input.user_input }}" ]; then
       echo "{{ docker_available_versions.stdout_lines[0] }}"
     else
-      echo "{{ docker_available_versions.stdout }}" | grep -E '^{{ docker_version_input.user_input | regex_escape }}' | head -n 1
+      echo "{{ docker_version_input.user_input }}"
     fi
   register: selected_docker_version
   changed_when: false
