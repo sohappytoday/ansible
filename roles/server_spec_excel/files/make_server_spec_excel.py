@@ -8,7 +8,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 BASE_DIR = Path(__file__).resolve().parent
 JSON_DIR = BASE_DIR / "json"
 TODAY = datetime.now().strftime("%Y%m%d")
-EXCEL_FILE = BASE_DIR / "xlsx" / f"server-spec-{TODAY}.xlsx"
+EXCEL_FILE = BASE_DIR / "server_spec" / f"server-spec-{TODAY}.xlsx"
 
 
 def get_json_files():
@@ -102,6 +102,7 @@ def create_excel(rows):
     for row_idx in range(2, ws.max_row + 1):
         ws.row_dimensions[row_idx].height = 45
 
+    EXCEL_FILE.parent.mkdir(parents=True, exist_ok=True)
     wb.save(EXCEL_FILE)
 
 

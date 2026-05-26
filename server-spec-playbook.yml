@@ -23,3 +23,9 @@
         content: "{{ server_info | to_nice_json }}"
         dest: "./output/json/{{ inventory_hostname }}_{{ hostvars['localhost']['collected_time'] }}.json"
       delegate_to: localhost
+
+- name: Generate Server Spec Excel
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - server_spec_excel

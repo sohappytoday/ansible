@@ -1,0 +1,31 @@
+---
+- name: Build Excel generator Docker image
+  command: >
+    docker build
+    -f server_spec.Dockerfile
+    -t {{ excel_image_name }}:{{ excel_image_version }}
+    .
+  args:
+    chdir: "{{ role_path }}/files"
+
+- name: Generate Excel from JSON files
+  command: >
+    docker run --rm
+    -v {{ playbook_dir }}/output:/app
+    {{ excel_image_name }}:{{ excel_image_version }}
+
+- name: Remove Docker image
+  command: docker rmi {{ excel_image_name }}:{{ excel_image_version }}
+  changed_when: false
+
+- name: Find JSON files
+  find:
+    paths: "{{ playbook_dir }}/output/json"
+    patterns: "*.json"
+  register: json_files
+
+- name: Clean JSON files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ json_files.files }}"
