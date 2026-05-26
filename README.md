@@ -28,8 +28,147 @@ CNCF 검색, ChatGPT 검색 등 여러가지를 알아보면서 RedHat이 개발
 
 ## Node Exporter 설치
 
-설치하기 전에 Node Exporter의 기능부터 알아야 한다.
+### Node Exporter란?
 
+Node Exporter는 Prometheus 생태계의 공식 익스포터로, Linux/Unix 서버의 **하드웨어 및 OS 수준 메트릭**을 수집해 Prometheus가 스크랩할 수 있는 형태로 노출한다.
+
+주요 수집 항목은 다음과 같다.
+
+| 항목 | 설명 |
+|---|---|
+| CPU | 코어별 사용률, idle/iowait/user/system 시간 |
+| Memory | 총 메모리, 사용 중, 캐시, 버퍼, 스왑 등 |
+| Disk I/O | 읽기/쓰기 처리량, IOPS, 큐 깊이 |
+| Filesystem | 마운트 포인트별 사용량 및 inode |
+| Network | 인터페이스별 송수신 바이트, 패킷, 에러 |
+| System | 부팅 시간, 프로세스 수, 파일 디스크립터 수 |
+
+기본 포트는 `9100`이지만, 이 프로젝트에서는 여러 서버에서 포트를 통일하기 위해 사용하지 않는 포트 중 하나인 **`30910`**으로 변경해 운영했다.
+
+---
+
+### 설계 방식
+
+#### 전체 흐름
+
+```
+Ansible 제어 노드 (로컬)
+    │
+    ├─ 1. GitHub에서 node_exporter 바이너리 다운로드 (로컬 /tmp에 캐싱)
+    │
+    └─ 2. 각 대상 서버로 업로드 → 압축 해제 → 바이너리 배치
+               │
+               ├─ 3. 전용 시스템 유저(node_exporter) 생성
+               ├─ 4. systemd 서비스 등록 및 활성화
+               ├─ 5. 방화벽(firewalld / ufw) 중지
+               └─ 6. /tmp 임시 파일 정리
+```
+
+#### 주요 설계 포인트
+
+**1. 바이너리 로컬 캐싱 (`delegate_to: localhost`)**
+
+50개 이상의 서버에 동일 파일을 배포할 때, 서버마다 GitHub에서 직접 다운로드하면 네트워크 부하가 심하고 속도도 느리다.
+아카이브가 로컬 `/tmp`에 없을 때만 한 번 다운로드하고, 이후 서버들에는 `copy` 모듈로 업로드하는 방식을 사용했다.
+
+```yaml
+- name: Check node_exporter archive exists
+  stat:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+  register: node_exporter_archive
+  delegate_to: localhost
+
+- name: Download node_exporter
+  get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/..."
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+  when: not node_exporter_archive.stat.exists
+  delegate_to: localhost
+```
+
+**2. amd64 / arm64 자동 감지**
+
+사내에 x86 서버와 ARM 서버가 혼재해 있어, `ansible_architecture` 팩트를 활용해 아키텍처를 자동으로 판별했다.
+
+```yaml
+- name: Check architecture
+  set_fact:
+    arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+```
+
+**3. 전용 시스템 유저 + systemd 보안 강화**
+
+node_exporter 프로세스가 불필요한 권한을 갖지 않도록 로그인 불가 시스템 유저를 생성하고, systemd 유닛에 보안 옵션을 적용했다.
+
+```ini
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+```
+
+**4. OS 계열별 방화벽 처리**
+
+Rocky Linux / RHEL 계열은 `firewalld`와 SELinux를, Ubuntu / Debian 계열은 `ufw`를 중지하도록 분기했다.
+
+```yaml
+- name: Stop firewalld (Rocky/RHEL 계열만)
+  systemd:
+    name: firewalld
+    state: stopped
+  when: ansible_os_family == "RedHat"
+
+- name: Stop ufw (Ubuntu/Debian 계열만)
+  systemd:
+    name: ufw
+    state: stopped
+  when: ansible_os_family == "Debian"
+```
+
+**5. 불필요한 마운트 포인트 제외**
+
+`/proc`, `/sys`, Docker/컨테이너 관련 overlay 파일시스템 등은 메트릭 노이즈가 심하기 때문에 수집 대상에서 제외했다.
+
+---
+
+### 롤 구조
+
+```
+roles/node_exporter/
+├── defaults/
+│   └── main.yml          # 버전, 포트, 유저명 기본값
+├── handlers/
+│   └── main.yml          # systemd 재시작 핸들러
+├── tasks/
+│   └── main.yml          # 설치 태스크 전체
+└── templates/
+    └── node-exporter.service.j2   # systemd 유닛 템플릿
+```
+
+변수는 `defaults/main.yml`에서 관리하므로, 포트나 버전 변경 시 해당 파일만 수정하면 된다.
+
+```yaml
+node_exporter_version: "1.8.2"
+node_exporter_port: 30910
+node_exporter_user: node_exporter
+```
+
+---
+
+### 실행 방법
+
+```bash
+ansible-playbook -i inventory/hosts.yml install-node-exporter-playbook.yml
+```
+
+---
+
+### Grafana 대시보드 결과
+
+<!-- 스크린샷 추가 예정 -->
 
 ---
 # 트러블 슈팅
