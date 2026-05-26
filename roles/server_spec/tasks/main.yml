@@ -1,0 +1,64 @@
+---
+# IP        
+- name: Get Internal IP
+  shell: hostname -I | tr ' ' '\n' | grep '^{{ internal_ip_prefix}}' | head -n 1
+  register: internal_ip
+  changed_when: false
+
+# Hostname
+- name: Get Hostname
+  shell: hostname
+  register: hostname_info
+  changed_when: false
+
+# OS
+- name: Get OS
+  shell: . /etc/os-release && echo "$PRETTY_NAME"
+  register: os_pretty
+  changed_when: false
+
+# CPU  
+- name: Get CPU Model Name
+  shell: |
+    lscpu | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2}'
+  register: cpu_model_name
+  changed_when: false
+
+- name: Get CPU Core count
+  shell: nproc
+  register: cpu_core_num
+  changed_when: false
+
+- name: Get CPU thread per core
+  shell: |
+    lscpu | awk -F: '/Thread\(s\) per core/ {gsub(/^[ \t]+/, "", $2); print $2}'
+  register: cpu_thread_per_core
+  changed_when: false
+
+# RAM
+- name: Get RAM
+  shell: free -h | awk '/^Mem:/ {print $2}'
+  register: ram_info
+  changed_when: false
+
+# Disk
+- name: Get Disk
+  shell: lsblk -d -o NAME,TYPE,SIZE,ROTA,MODEL | awk '$2=="disk"'
+  register: disk_info
+  changed_when: false
+
+# Build
+- name: Build server info variable
+  set_fact:
+    server_info:
+      server: "{{ inventory_hostname }}"
+      hostname: "{{ hostname_info.stdout | default('N/A', true) }}"
+      internal_ip: "{{ internal_ip.stdout | default('N/A', true) }}"
+      os: "{{ os_pretty.stdout | default('N/A', true) }}"
+      cpu_model_name: "{{ cpu_model_name.stdout | default('N/A', true) }}"
+      cpu_core_count: "{{ cpu_core_num.stdout | default('N/A', true) }}"
+      cpu_thread_per_core: "{{ cpu_thread_per_core.stdout | default('N/A', true) }}"
+      ram: "{{ ram_info.stdout | default('N/A', true) }}"
+      disk: "{{ disk_info.stdout_lines | default([]) }}"
+
+
