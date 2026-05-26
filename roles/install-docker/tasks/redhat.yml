@@ -36,6 +36,10 @@
       - docker-latest-logrotate
       - docker-logrotate
       - docker-engine
+      - docker-ce
+      - docker-ce-cli
+      - docker-buildx-plugin
+      - docker-compose-plugin
       - podman
       - runc
       - containerd
