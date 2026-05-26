@@ -1,0 +1,336 @@
+all:
+  hosts:
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+      location: company
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
+    {별칭 보통 hostname}:
+      ansible_host: {ip}
+      ansible_port: {port}
+      ansible_user: {계정}
+      ansible_become: true # 권한 변경할건지
+      ansible_become_method: {권한 변경시 어떤 명령어로? ex : sudo, su}
+      ansible_become_user: {어느 계정으로?}
+      ansible_become_password: {명령어 시 뜨는 비밀번호}
+      location: company # 회사 내 서버냐, idc 센터냐
