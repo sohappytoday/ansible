@@ -38,10 +38,7 @@ Node Exporter는 Prometheus 생태계의 공식 익스포터로, Linux/Unix 서�
 |---|---|
 | CPU | 코어별 사용률, idle/iowait/user/system 시간 |
 | Memory | 총 메모리, 사용 중, 캐시, 버퍼, 스왑 등 |
-| Disk I/O | 읽기/쓰기 처리량, IOPS, 큐 깊이 |
-| Filesystem | 마운트 포인트별 사용량 및 inode |
 | Network | 인터페이스별 송수신 바이트, 패킷, 에러 |
-| System | 부팅 시간, 프로세스 수, 파일 디스크립터 수 |
 
 기본 포트는 `9100`이지만, 이 프로젝트에서는 여러 서버에서 포트를 통일하기 위해 사용하지 않는 포트 중 하나인 **`30910`**으로 변경해 운영했다.
 
