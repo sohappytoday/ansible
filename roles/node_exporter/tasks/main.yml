@@ -1,0 +1,82 @@
+- name: Create node_exporter user
+  user:
+    name: "{{ node_exporter_user }}"
+    shell: /sbin/nologin
+    system: yes
+    create_home: no
+
+- name: Check architecture
+  set_fact:
+    arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Check node_exporter archive exists
+  stat:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+  register: node_exporter_archive
+  delegate_to: localhost
+
+- name: Download node_exporter
+  get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+    mode: "0644"
+  when: not node_exporter_archive.stat.exists
+  delegate_to: localhost
+
+- name: Upload node_exporter
+  copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}.tar.gz"
+    dest: "/tmp/node_exporter.tar.gz"
+
+- name: Extract node_exporter
+  unarchive:
+    src: /tmp/node_exporter.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Copy binary
+  copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    remote_src: yes
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_user }}"
+    mode: '0755'
+
+- name: Create systemd service
+  template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+  notify: Restart node_exporter
+
+- name: Disable SELinux (Rocky/RHEL 계열만)
+  selinux:
+    state: disabled
+  when: ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Stop firewalld (Rocky/RHEL 계열만)
+  systemd:
+    name: firewalld
+    state: stopped
+  when: ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Stop ufw (Ubuntu/Debian 계열만)
+  systemd:
+    name: ufw
+    state: stopped
+  when: ansible_os_family == "Debian"
+  ignore_errors: yes
+
+- name: Enable and start node_exporter
+  systemd:
+    name: node_exporter
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Cleanup tmp files
+  file:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ arch }}"
+    state: absent
