@@ -168,7 +168,13 @@ ansible-playbook -i inventory/hosts.yml install-node-exporter-playbook.yml
 
 ### Grafana 대시보드 결과
 
-<!-- 스크린샷 추가 예정 -->
+![전체 서버 기본 현황](images/node-exporter/total-default.png)
+
+![전체 서버 Top 5](images/node-exporter/total-top5.png)
+
+![CPU/메모리 Top 10](images/node-exporter/cpu-mem-top10.png)
+
+![네트워크 Top 10](images/node-exporter/network-top10.png)
 
 ---
 # 트러블 슈팅
