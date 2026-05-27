@@ -524,6 +524,129 @@ ansible-playbook -i inventory/hosts.yml gpu-metrics-playbook.yml
 
 ---
 
+## Docker 설치
+
+### 개요
+
+Node Exporter 설치, 서버 사양 조사, GPU 메트릭 수집 등 여러 작업을 진행하면서 Docker가 설치되어 있지 않은 서버에서 직접 설치해야 하는 상황이 종종 생겼다.  
+또한 Ansible을 더 깊이 공부하고자, 단순 설치를 넘어 **OS 및 버전 검증**, **기존 Container Runtime 감지**, **버전 선택 인터랙션** 등을 포함한 롤을 직접 구현해보았다.
+
+---
+
+### 설계 방식
+
+#### 전체 흐름
+
+```
+Ansible 제어 노드 (로컬)
+    │
+    └─ 각 대상 서버
+            │
+            ├─ 1. OS 종류 및 버전 검증 (지원 불가 시 즉시 중단)
+            ├─ 2. 아키텍처 검증 (지원 불가 시 즉시 중단)
+            ├─ 3. 기존 Container Runtime 감지 → 사용자 확인 후 제거
+            ├─ 4. 설치 가능한 Docker 버전 목록 출력
+            ├─ 5. 사용자가 버전 선택 (Enter 시 최신 버전)
+            └─ 6. 선택한 버전 설치 및 systemd 등록
+```
+
+#### 주요 설계 포인트
+
+**1. OS 및 버전 사전 검증**
+
+지원하지 않는 OS나 버전에서 설치를 시도하면 중간에 실패하기 때문에, 시작 시점에 즉시 `fail`로 중단한다.  
+에러 메시지에 지원 목록을 함께 출력해 원인을 바로 파악할 수 있도록 했다.
+
+```yaml
+- name: Reject unsupported OS
+  fail:
+    msg: "지원하지 않는 OS 입니다. {{ os_id.stdout }} {{ os_version.stdout }}.
+          (가능한 OS 목록 : [Ubuntu], [Rocky], [RHEL])"
+  when: os_id.stdout not in ["ubuntu", "rocky", "rhel"]
+
+- name: Reject unsupported OS version
+  fail:
+    msg: "지원하지 않는 OS version 입니다.: {{ os_id.stdout }} {{ os_version.stdout }}.
+          (Ubuntu 22.04, 24.04, 25.10, 26.04 / Rocky, RHEL 8, 9, 10)"
+  when: >
+    (os_id.stdout == "ubuntu" and os_version.stdout not in ["22.04", "24.04", "25.10", "26.04"]) or
+    (os_id.stdout in ["rocky", "rhel"] and os_version.stdout.split('.')[0] not in ["8", "9", "10"])
+```
+
+**2. 기존 Container Runtime 감지 및 사용자 확인**
+
+이미 Docker나 containerd 등이 설치된 서버에서 무작정 제거하면 운영 중인 컨테이너에 장애가 생길 수 있다.  
+`pause` 모듈로 기존 패키지 목록을 보여주고 계속 진행할지 확인을 받은 뒤, `yes`가 아니면 설치를 중단한다.
+
+```yaml
+- name: Show warning if container runtime exists
+  pause:
+    prompt: |
+      이미 설치된 Container Runtime이 있습니다.
+      {{ runtime_packages.stdout }}
+      계속 진행하시겠습니까? (yes/no)
+  register: continue_answer
+  when: runtime_packages.stdout != ""
+
+- name: Stop if user does not agree
+  fail:
+    msg: "Docker 설치를 중단하겠습니다."
+  when:
+    - runtime_packages.stdout | default('') != ""
+    - continue_answer.user_input | lower not in ["yes", "y"]
+```
+
+**3. 버전 선택 인터랙션 (`pause` + `until`)**
+
+설치 가능한 Docker 버전 목록을 출력한 뒤, 사용자가 원하는 버전을 직접 입력할 수 있도록 했다.  
+`until`로 목록에 없는 버전을 입력하면 재입력을 요청하고, Enter만 누르면 최신 버전이 선택된다.
+
+```yaml
+- name: Select Docker version
+  pause:
+    prompt: "설치할 Docker version을 입력하세요. 예: 5:28.5.2-1~ubuntu.24.04~noble / Enter면 최신 버전"
+  register: docker_version_input
+  until: >
+    (docker_version_input.user_input | length == 0) or
+    (docker_version_input.user_input in docker_available_versions.stdout_lines)
+  retries: 999
+```
+
+**4. OS 계열별 태스크 분기**
+
+Ubuntu는 `apt` + Docker 공식 GPG 키 및 APT 저장소를, Rocky/RHEL은 `dnf` + Docker CE 저장소를 사용한다.  
+`import_tasks`로 OS별 파일을 분리해 `main.yml`이 분기 역할만 담당하도록 구성했다.
+
+```yaml
+- import_tasks: ubuntu.yml
+  when: os_id.stdout == "ubuntu"
+
+- import_tasks: redhat.yml
+  when: os_id.stdout in ["rhel", "rocky"]
+```
+
+---
+
+### 롤 구조
+
+```
+roles/install_docker/
+└── tasks/
+    ├── main.yml        # OS/아키텍처 검증 및 OS별 분기
+    ├── ubuntu.yml      # Ubuntu 전용 설치 (apt, GPG 키, APT 저장소)
+    └── redhat.yml      # Rocky/RHEL 전용 설치 (dnf, Docker CE 저장소)
+```
+
+---
+
+### 실행 방법
+
+```bash
+ansible-playbook -i inventory/hosts.yml install-docker-playbook.yml
+```
+
+---
+
 # 트러블 슈팅
 
 
