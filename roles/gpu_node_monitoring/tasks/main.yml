@@ -1,0 +1,105 @@
+- name: Check NVIDIA GPU hardware exists
+  shell: |
+    lspci | grep -i nvidia | grep -Ei 'vga|3d|display' | wc -l
+  register: nvidia_gpu_count
+  changed_when: false
+  failed_when: false
+
+#- name: Show GPU hardware check result
+#  debug:
+#    msg: "gpu_count={{ nvidia_gpu_count.stdout }}"
+
+- name: Skip host when NVIDIA GPU does not exist
+  meta: end_host
+  when: nvidia_gpu_count.stdout | int == 0
+
+- name: Check NVIDIA Driver exists
+  shell: |
+    command -v nvidia-smi
+  register: exists_nvidia_smi
+  changed_when: false
+  failed_when: false
+
+#- name: Show NVIDIA Driver command check result
+#  debug:
+#     msg: "rc={{ exists_nvidia_smi.rc }} / {{ 'Driver 있음' if exists_nvidia_smi.rc == 0 else 'Driver 없음' }}"
+
+- name: Skip host when NVIDIA Driver does not exist
+  meta: end_host
+  when: exists_nvidia_smi.rc | int != 0
+  
+- name: Check NVIDIA Driver Version
+  shell: |
+    nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -n1
+  register: driver_version
+  changed_when: false
+
+- name: Check CUDA Version
+  shell: |
+    nvidia-smi | grep -oP 'CUDA Version:\s+\K[0-9.]+'
+  register: cuda_version
+  changed_when: false
+
+- name: Check GPU node info
+  shell: |
+    nvidia-smi --query-gpu=index,uuid,name --format=csv,noheader,nounits
+  register: gpu_node_info
+  changed_when: false    
+
+#- name: Show parsed GPU node info
+#  debug:
+#    msg:
+#      gpu_index: "{{ item.split(',')[0] | trim }}"
+#      gpu_uuid: "{{ item.split(',')[1] | trim }}"
+#      gpu_name: "{{ item.split(',')[2] | trim }}"
+#  loop: "{{ gpu_node_info.stdout_lines }}"
+
+- name: Insert GPU node info into PostgreSQL
+  shell: |
+    docker exec -i postgres psql -U postgres -d ansible_gpu -c "
+    INSERT INTO gpu_nodes (
+      type, host, gpu_index, gpu_uuid, gpu_name,
+      driver_version, cuda_version, updated_at, is_active 
+    )
+    VALUES (
+      '{{ type }}',
+      '{{ ansible_host }}',
+      {{ item.split(',')[0] | trim }},
+      '{{ item.split(',')[1] | trim }}',
+      '{{ item.split(',')[2] | trim }}',
+      '{{ driver_version.stdout | default("N/A", true) }}',
+      '{{ cuda_version.stdout | default("N/A", true) }}',
+      now(),
+      true
+    )
+    ON CONFLICT (gpu_uuid)
+    DO UPDATE SET
+      type = EXCLUDED.type,
+      host = EXCLUDED.host,
+      gpu_index = EXCLUDED.gpu_index,
+      gpu_name = EXCLUDED.gpu_name,
+      driver_version = EXCLUDED.driver_version,
+      cuda_version = EXCLUDED.cuda_version,
+      updated_at = now(),
+      is_active = true;
+    "
+  loop: "{{ gpu_node_info.stdout_lines }}"
+  delegate_to: localhost
+  changed_when: false
+
+- name: Do inactive in DB when GPUs as inactive
+  shell: |
+    docker exec -i postgres psql -U postgres -d ansible_gpu -c "
+    UPDATE gpu_nodes
+    SET is_active = false,
+        updated_at = now()
+    WHERE host = '{{ ansible_host }}'
+      AND gpu_uuid NOT IN (
+        {% for line in gpu_node_info.stdout_lines %}
+        '{{ line.split(',')[1] | trim }}'{% if not loop.last %},{% endif %}
+        {% endfor %}
+      );
+    "
+  delegate_to: localhost
+  changed_when: false
+  when: gpu_node_info.stdout_lines | length > 0

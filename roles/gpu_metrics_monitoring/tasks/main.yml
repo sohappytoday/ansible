@@ -1,0 +1,127 @@
+- name: Check NVIDIA GPU hardware exists
+  shell: |
+    lspci | grep -i nvidia | grep -Ei 'vga|3d|display' | wc -l
+  register: nvidia_gpu_count
+  changed_when: false
+  failed_when: false
+
+#- name: Show GPU hardware check result
+#  debug:
+#    msg: "gpu_count={{ nvidia_gpu_count.stdout }}"
+
+- name: Skip host when NVIDIA GPU does not exist
+  meta: end_host
+  when: nvidia_gpu_count.stdout | int == 0
+
+- name: Check NVIDIA Driver exists
+  shell: |
+    command -v nvidia-smi
+  register: exists_nvidia_smi
+  changed_when: false
+  failed_when: false
+
+#- name: Show NVIDIA Driver command check result
+#  debug:
+#     msg: "rc={{ exists_nvidia_smi.rc }} / {{ 'Driver 있음' if exists_nvidia_smi.rc == 0 else 'Driver 없음' }}"
+
+- name: Skip host when NVIDIA Driver does not exist
+  meta: end_host
+  when: exists_nvidia_smi.rc | int != 0
+
+- name: Get GPU Metrics
+  shell: |
+    nvidia-smi --query-gpu=uuid,utilization.gpu,memory.used,memory.total,utilization.memory,power.draw \
+      --format=csv,noheader,nounits
+  register: gpu_metrics_info
+  changed_when: false
+  failed_when: false
+
+- name: Get GPU Process Metrics
+  shell: |
+    nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_memory \
+      --format=csv,noheader,nounits
+  register: gpu_process_metrics_info
+  changed_when: false
+  failed_when: false
+
+- name: Get process username
+  shell: "ps -p {{ item.split(',')[1] | trim }} -o user="
+  loop: "{{ gpu_process_metrics_info.stdout_lines }}"
+  register: process_user
+  changed_when: false
+  failed_when: false
+  when: 
+    - gpu_process_metrics_info.stdout | trim != ""
+    - item | trim != ""
+    - item.split(',') | length >= 4
+    - item.split(',')[1] | trim is match('^[0-9]+$')
+
+- name: Insert GPU Metrics into PostgreSQL
+  shell: |
+    docker exec -i postgres psql -U postgres -d ansible_gpu -c "
+    INSERT INTO gpu_metrics (
+      collected_at,
+      type,
+      host,
+      gpu_uuid,
+      gpu_util_percent,
+      memory_used_mib,
+      memory_total_mib,
+      memory_util_percent,
+      power_draw_w
+    )
+    VALUES (
+      now(),
+      '{{ type }}',
+      '{{ ansible_host }}',
+      '{{ item.split(",")[0] | trim }}',
+      {{ 'NULL' if (item.split(",")[1] | trim) == '[N/A]' else (item.split(",")[1] | trim) }},
+      {{ 'NULL' if (item.split(",")[2] | trim) == '[N/A]' else (item.split(",")[2] | trim) }},
+      {{ 'NULL' if (item.split(",")[3] | trim) == '[N/A]' else (item.split(",")[3] | trim) }},
+      {{ 'NULL' if (item.split(",")[4] | trim) == '[N/A]' else (item.split(",")[4] | trim) }},
+      {{ 'NULL' if (item.split(",")[5] | trim) == '[N/A]' else (item.split(",")[5] | trim) }}
+    );
+    "
+  loop: "{{ gpu_metrics_info.stdout_lines }}"
+  delegate_to: localhost
+  changed_when: false
+  when:
+    - item | trim != ""
+    - item.split(',') | length >= 6 
+
+- name: Insert GPU Process Metrics into PostgreSQL
+  shell: |
+    docker exec -i postgres psql -U postgres -d ansible_gpu -c "
+    INSERT INTO gpu_process_metrics (
+      collected_at,
+      type,
+      host,
+      gpu_uuid,
+      pid,
+      username,
+      process_name,
+      used_memory_mib
+    )
+    VALUES (
+      now(),
+      '{{ type }}',
+      '{{ ansible_host }}',
+      '{{ item.split(",")[0] | trim }}',
+      {{ item.split(",")[1] | trim }},
+      '{{ process_user.results[idx].stdout | trim }}',
+      '{{ item.split(",")[2] | trim }}',
+      {{ item.split(",")[3] | trim }}
+    );
+    "
+  loop: "{{ gpu_process_metrics_info.stdout_lines }}"
+  loop_control:
+    index_var: idx
+  delegate_to: localhost
+  changed_when: false
+  when:
+    - hostvars[inventory_hostname].process_user is defined
+    - gpu_process_metrics_info.stdout | trim != ""
+    - item | trim != ""
+    - item.split(',') | length >= 4
+    - item.split(',')[1] | trim is match('^[0-9]+$')
+
