@@ -649,6 +649,28 @@ ansible-playbook -i inventory/hosts.yml install-docker-playbook.yml
 
 # 트러블 슈팅
 
+## 1. ssh 접속  
+### 1-1. Verfication Code
+처음에 한 개의 host로 실험을 해 보고, 잘 작동하는지를 확인하였다.  
+모니터링 서버에서 key.pub, key(private)을 생성한 뒤, 키를 복사하려고 명령어를 쳤다.  
+```shell
+ssh-copy-id -i ~/.ssh/key.pub ubuntu@100.0.0.5
+```
+그랬더니 모든 서버에서 verfication_code를 요구하여 난감한 상황이었다.  
+사수 분께 요청을 드려 OTP가 담겨있는 드라이브를 받아 실행하였고,  
+모니터링 대상 서버의 ~/.ssh/authorized_keys에 잘 저장이 되는 것을 확인할 수 있었다.  
+
+### 1-2. 권한 문제  
+분명히 authorized_keys에 public key를 넣었는데 계속 ssh 연결 실패가 발생하였다.  
+사수분께서 디버깅하는 방법을 알려주셨고, `-vvv` 명령어에 대해 알게 되어 같이 디버깅을 하였다.  
+결론은 모니터링 대상 서버의 authorized_keys의 권한이 너무 많이 열려있다는 것이었다.
+
+```shell
+chmod 600 ~/.ssh/authorized_keys
+```
+이후 ssh 접속을 하니 잘 작동하는 것을 확인할 수 있었다.
+
+
 
 ---
 # 추가 작업 진행해볼 것
