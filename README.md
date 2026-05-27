@@ -351,6 +351,165 @@ ansible-playbook -i inventory/hosts.yml server-spec-playbook.yml
 | Disk | 디스크 목록 (이름/타입/크기/모델) |
 
 ---
+
+## Database로 우회하여 GPU 및 프로세스 상태 변화 수집
+
+### 개요
+
+`node-exporter`의 경우, OS 레벨단의 지표만 가져온다.  
+다만, gpu의 경우 NVIDIA Drvier 등 드라이버가 제공하는 지표이기 때문에, 새로운 오픈소스를 찾아보았다.  
+그 중, NVIDIA에서 제공하는 `dcgm-exporter`라는 gpu 수집 오픈소스에 대해서 알게 되었다.
+
+`dcgm-exporter`를 사용하려 했으나 문제가 생겼었다.
+모든 서버마다 안 쓰는 포트를 조사해야 했고, 또 선물(?) 느낌으로 만들어드리고 싶어서 사수 분께 말씀드리진 못하였다.  
+
+그래서 GPU 실시간 모니터링은 포기하고, CPU나 Mem, Network가 비정상적으로 찍힐 때 GPU 정보들을 뽑아내서 스냅샷 형태로 제공하려 했다.  
+그런데 문득 **결국 프로메테우스 수집하는 것도 스냅샷을 여러개 모은 것 아닌가?**라는 생각이 들었다.  
+
+모니터링 서버에 cron job으로 특정 시간마다 디비에 스냅샷으로 데이터를 수집하여 저장하고,  
+특정 시간마다 그라파나에서 이 디비의 정보들을 수집하면 되지 않을까?  
+
+방법이 괜찮은 것 같아 이 방식대로 ansible을 통해 구현하였다.
+
+구현 결과로 Grafana에서 다음 정보들을 확인할 수 있다.
+
+| 항목 | 설명 |
+|---|---|
+| 필터 별 GPU 및 Driver 정보 | GPU 모델명, 드라이버 버전, CUDA 버전 |
+| 필터 별 GPU 개수 | 선택한 필터 기준 보유 GPU 총 개수 |
+| 필터 별 노드 별 평균 GPU 사용률 Top N | 노드 단위 평균 사용률 상위 N개 |
+| 필터 별 노드 별 GPU 전력 사용량 Top N | 노드 단위 전력 소비 상위 N개 |
+| 프로세스 별 GPU 메모리 사용량 Top N | GPU를 점유 중인 프로세스별 메모리 상위 N개 |
+
+---
+
+### 설계 방식
+
+#### 전체 흐름
+
+```
+Ansible 제어 노드 (로컬)
+    │
+    ├─ [gpu-node-monitoring-playbook] GPU 노드 정보 수집 및 DB Upsert
+    │       ├─ NVIDIA GPU 하드웨어 존재 여부 확인
+    │       ├─ nvidia-smi 드라이버 존재 여부 확인
+    │       ├─ GPU 인덱스, UUID, 모델명, 드라이버 버전, CUDA 버전 수집
+    │       └─ gpu_nodes 테이블 Upsert (ON CONFLICT → UPDATE)
+    │
+    └─ [gpu-metrics-playbook] GPU 실시간 메트릭 수집 및 DB Insert
+            ├─ NVIDIA GPU 하드웨어 존재 여부 확인
+            ├─ nvidia-smi 드라이버 존재 여부 확인
+            ├─ GPU별 사용률, 메모리, 전력 수집
+            ├─ GPU 프로세스별 PID, 프로세스명, 메모리 사용량 수집
+            ├─ PID로 실행 유저명 조회 (ps)
+            └─ gpu_metrics / gpu_process_metrics 테이블 Insert
+```
+
+#### 주요 설계 포인트
+
+**1. GPU 하드웨어 및 드라이버 사전 확인**
+
+GPU가 없거나 드라이버가 설치되지 않은 서버에서 `nvidia-smi`를 실행하면 에러가 발생한다.  
+`lspci`로 NVIDIA GPU 하드웨어 존재 여부를, `command -v nvidia-smi`로 드라이버 설치 여부를 먼저 확인하고, 해당하지 않으면 `meta: end_host`로 해당 서버를 건너뛴다.
+
+```yaml
+- name: Check NVIDIA GPU hardware exists
+  shell: lspci | grep -i nvidia | grep -Ei 'vga|3d|display' | wc -l
+  register: nvidia_gpu_count
+  changed_when: false
+  failed_when: false
+
+- name: Skip host when NVIDIA GPU does not exist
+  meta: end_host
+  when: nvidia_gpu_count.stdout | int == 0
+```
+
+**2. 노드 정보와 메트릭 수집 플레이북 분리**
+
+GPU 노드 정보(모델명, 드라이버, CUDA 버전 등)는 자주 바뀌지 않는 정적인 데이터다.  
+반면 GPU 사용률, 메모리, 전력 같은 메트릭은 실시간으로 변하는 동적인 데이터다.  
+두 성격이 다른 데이터를 플레이북 단위로 분리해 수집 주기를 독립적으로 조정할 수 있도록 설계했다.
+
+**3. gpu_nodes 테이블 Upsert (ON CONFLICT)**
+
+GPU가 추가되거나 드라이버가 업데이트되는 경우를 고려해 `INSERT ... ON CONFLICT DO UPDATE` 방식으로 Upsert한다.  
+현재 서버에 존재하지 않는 GPU는 `is_active = false`로 마킹해 실제 삭제 없이 비활성 처리한다.
+
+```yaml
+- name: Do inactive in DB when GPUs as inactive
+  shell: |
+    docker exec -i postgres psql -U postgres -d ansible_gpu -c "
+    UPDATE gpu_nodes
+    SET is_active = false, updated_at = now()
+    WHERE host = '{{ ansible_host }}'
+      AND gpu_uuid NOT IN (
+        {% for line in gpu_node_info.stdout_lines %}
+        '{{ line.split(',')[1] | trim }}'{% if not loop.last %},{% endif %}
+        {% endfor %}
+      );
+    "
+```
+
+**4. 프로세스 실행 유저 조회**
+
+`nvidia-smi`의 프로세스 메트릭에는 PID만 포함되어 있고 유저명은 없다.  
+PID를 loop로 순회하며 `ps -p {pid} -o user=`로 유저명을 별도 수집한 뒤, `index_var`로 순서를 맞춰 프로세스 메트릭과 결합한다.
+
+```yaml
+- name: Get process username
+  shell: "ps -p {{ item.split(',')[1] | trim }} -o user="
+  loop: "{{ gpu_process_metrics_info.stdout_lines }}"
+  register: process_user
+  changed_when: false
+  failed_when: false
+```
+
+---
+
+### 롤 구조
+
+```
+roles/
+├── gpu_node_monitoring/
+│   ├── defaults/
+│   │   └── main.yml          # type 기본값
+│   └── tasks/
+│       └── main.yml          # GPU 노드 정보 수집 및 Upsert
+│
+└── gpu_metrics_monitoring/
+    ├── defaults/
+    │   └── main.yml          # type 기본값
+    └── tasks/
+        └── main.yml          # GPU 메트릭 및 프로세스 수집, Insert
+```
+
+---
+
+### 실행 방법
+
+```bash
+# GPU 노드 정보 수집 (드라이버 업데이트, GPU 추가·제거 시)
+ansible-playbook -i inventory/hosts.yml gpu-node-monitoring-playbook.yml
+
+# GPU 실시간 메트릭 수집
+ansible-playbook -i inventory/hosts.yml gpu-metrics-playbook.yml
+```
+
+### Grafana 대시보드 결과
+
+![전체 기본 현황](images/gpu-metrics/total-default.png)
+> 서버 수 등 실제 수치는 1의 자리수를 제외하고 가렸습니다.
+
+![상세 기본 현황](images/gpu-metrics/detail-default.png)
+
+![상세 Top 5](images/gpu-metrics/detail-top5.png)
+
+![노드별 상세](images/gpu-metrics/detail-node.png)
+
+![회사별 상세](images/gpu-metrics/detail-company.png)
+
+---
+
 # 트러블 슈팅
 
 
