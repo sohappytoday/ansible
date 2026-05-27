@@ -274,8 +274,9 @@ Gateway : `ip route get 8.8.8.8 | awk {print $3}`
 
 **4. Docker 기반 Excel 변환**
 
-제어 노드에 Python 패키지(`openpyxl`)를 직접 설치하는 대신, Docker 이미지로 실행 환경을 격리했다.  
-실행 후 이미지를 즉시 삭제해 로컬 환경을 오염시키지 않는다.
+Excel 생성은 이 플레이북에서만 필요한 일회성 작업이다.  
+`openpyxl` 같은 Python 패키지를 제어 노드에 직접 설치하면, 이후 사용하지 않을 패키지가 서버에 계속 남게 된다.  
+Docker 컨테이너로 실행 환경을 격리하면 서버를 오염시키지 않고, 실행 후 이미지를 즉시 삭제해 흔적도 남지 않는다.
 
 ```yaml
 - name: Build Excel generator Docker image
@@ -339,7 +340,9 @@ ansible-playbook -i inventory/hosts.yml server-spec-playbook.yml
 |---|---|
 | Server | 인벤토리 호스트명 |
 | Hostname | 서버 실제 hostname |
-| Internal IP | 사내 내부망 IP |
+| Internal IP | 외부 인터넷으로 나가는 내부 IP |
+| External IP | 공인 IP |
+| Gateway | 게이트웨이 IP |
 | OS | OS 이름 및 버전 |
 | CPU Model | CPU 모델명 |
 | CPU Core Count | 전체 코어 수 |
