@@ -659,6 +659,10 @@ ssh-copy-id -i ~/.ssh/key.pub ubuntu@100.0.0.5
 그랬더니 모든 서버에서 verfication_code를 요구하여 난감한 상황이었다.  
 사수 분께 요청을 드려 OTP가 담겨있는 드라이브를 받아 실행하였고,  
 모니터링 대상 서버의 ~/.ssh/authorized_keys에 잘 저장이 되는 것을 확인할 수 있었다.  
+Verfication Code가 드라이브에 없는 서버들의 경우, private key로 접속을 해 직접 수동으로 넣어주었다.  
+
+이 작업이 가장 오래 걸렸다.  
+
 
 ### 1-2. 권한 문제  
 
@@ -673,7 +677,6 @@ chmod 600 ~/.ssh/authorized_keys
 
 ## 2. GPU Metric 수집  
 
-이 부분은   Database로 우회하여 GPU 및 프로세스 상태 변화 수집 내 [개요](#개요-1)
+이 부분은 Database로 우회하여 GPU 및 프로세스 상태 변화 수집 내 [개요](#개요-1)에 작성해 두었습니다.
 
 ---
-# 추가 작업 진행해볼 것
