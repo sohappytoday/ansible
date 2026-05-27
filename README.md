@@ -661,6 +661,7 @@ ssh-copy-id -i ~/.ssh/key.pub ubuntu@100.0.0.5
 모니터링 대상 서버의 ~/.ssh/authorized_keys에 잘 저장이 되는 것을 확인할 수 있었다.  
 
 ### 1-2. 권한 문제  
+
 분명히 authorized_keys에 public key를 넣었는데 계속 ssh 연결 실패가 발생하였다.  
 사수분께서 디버깅하는 방법을 알려주셨고, `-vvv` 명령어에 대해 알게 되어 같이 디버깅을 하였다.  
 결론은 모니터링 대상 서버의 authorized_keys의 권한이 너무 많이 열려있다는 것이었다.
@@ -670,7 +671,9 @@ chmod 600 ~/.ssh/authorized_keys
 ```
 이후 ssh 접속을 하니 잘 작동하는 것을 확인할 수 있었다.
 
+## 2. GPU Metric 수집  
 
+이 부분은   Database로 우회하여 GPU 및 프로세스 상태 변화 수집 내 [개요](#개요-1)
 
 ---
 # 추가 작업 진행해볼 것
