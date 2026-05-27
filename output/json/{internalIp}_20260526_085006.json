@@ -6,9 +6,9 @@
         "sda     disk   3.7T    1 TOSHIBA_HDWQ140",
         "nvme0n1 disk 465.8G    0 Samsung SSD 970 EVO Plus 500GB"
     ],
-    "hostname": "ip-172-31-52-67",
-    "internal_ip": "N/A",
+    "hostname": "example-hostname",
+    "internal_ip": "10.0.0.1",
     "os": "Ubuntu 20.04.4 LTS",
     "ram": "31Gi",
-    "server": "예시"
+    "server": "example-server-01"
 }

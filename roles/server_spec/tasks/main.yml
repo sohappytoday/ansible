@@ -1,8 +1,18 @@
 ---
-# IP        
+# IP
 - name: Get Internal IP
-  shell: hostname -I | tr ' ' '\n' | grep '^{{ internal_ip_prefix}}' | head -n 1
+  shell: ip route get 8.8.8.8 | awk '{print $7}'
   register: internal_ip
+  changed_when: false
+
+- name: Get External IP
+  shell: curl -4 --silent ifconfig.me
+  register: external_ip
+  changed_when: false
+
+- name: Get Gateway
+  shell: ip route get 8.8.8.8 | awk '{print $3}'
+  register: gateway
   changed_when: false
 
 # Hostname
@@ -54,6 +64,8 @@
       server: "{{ inventory_hostname }}"
       hostname: "{{ hostname_info.stdout | default('N/A', true) }}"
       internal_ip: "{{ internal_ip.stdout | default('N/A', true) }}"
+      external_ip: "{{ external_ip.stdout | default('N/A', true) }}"
+      gateway: "{{ gateway.stdout | default('N/A', true) }}"
       os: "{{ os_pretty.stdout | default('N/A', true) }}"
       cpu_model_name: "{{ cpu_model_name.stdout | default('N/A', true) }}"
       cpu_core_count: "{{ cpu_core_num.stdout | default('N/A', true) }}"

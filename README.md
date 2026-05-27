@@ -174,6 +174,180 @@ ansible-playbook -i inventory/hosts.yml install-node-exporter-playbook.yml
 ![네트워크 Top 10](images/node-exporter/network-top10.png)
 
 ---
+
+## 모든 서버 사양 조사
+
+### 개요
+
+Node Exporter 설치 작업과 병행해 약 50개 서버의 하드웨어 사양을 한눈에 파악할 수 있는 문서가 필요했다.  
+각 서버에 직접 접속해 `lscpu`, `free`, `lsblk` 등을 실행하고 결과를 수작업으로 정리하는 것은 비효율적이라고 판단했다.  
+그래서 Ansible로 모든 서버의 사양을 일괄 수집하고, **Excel 파일로 자동 생성**하는 작업을 구현했다.
+
+---
+
+### 설계 방식
+
+#### 전체 흐름
+
+```
+Ansible 제어 노드 (로컬)
+    │
+    ├─ [Play 1] 각 대상 서버에서 사양 수집
+    │       ├─ 내부 IP, Hostname, OS
+    │       ├─ CPU 모델명, 코어 수, 스레드/코어
+    │       ├─ RAM 용량
+    │       └─ Disk 목록 (이름, 타입, 크기, 모델)
+    │
+    ├─ 수집 결과를 로컬 output/json/ 에 호스트별 JSON으로 저장
+    │       └─ 파일명: {inventory_hostname}_{수집시각}.json
+    │
+    └─ [Play 2] 로컬에서 Docker로 Excel 생성
+            ├─ Python(openpyxl) 이미지 빌드
+            ├─ JSON 파일들을 읽어 .xlsx 생성 → output/xlsx/
+            └─ 임시 Docker 이미지 및 JSON 파일 정리
+```
+
+#### 주요 설계 포인트
+
+**1. JSON 로컬 저장**
+
+각 서버에서 수집한 사양 데이터를 원격 서버가 아닌 Ansible 제어 노드(로컬)에 저장해야 했다.  
+`delegate_to: localhost`를 사용해 `copy` 모듈을 로컬에서 실행함으로써, 서버별 결과를 로컬에 JSON으로 축적했다.
+
+```yaml
+- name: Save server info as JSON
+  copy:
+    content: "{{ server_info | to_nice_json }}"
+    dest: "./output/json/{{ inventory_hostname }}_{{ hostvars['localhost']['collected_time'] }}.json"
+  delegate_to: localhost
+```
+
+**2. 내부 IP prefix 필터링**
+
+서버에는 인터넷 IP, 내부망 IP 등 여러 IP가 할당된 경우가 많다.  
+`hostname -I`의 출력 중 사내 내부망 대역(`192.`)에 해당하는 IP만 추출하도록 `internal_ip_prefix` 변수로 분리했다.
+
+```yaml
+- name: Get Internal IP
+  shell: hostname -I | tr ' ' '\n' | grep '^{{ internal_ip_prefix }}' | head -n 1
+```
+
+```yaml
+# defaults/main.yml
+internal_ip_prefix: "192."
+```
+
+**2-1. 자체 피드백**
+
+- 기존 방식의 한계점  
+지금 한 방식은 내부 IP가 192로 시작해야 한다라는 조건이 있지만, `172`나 복합적으로 사용하게 되면 찾을 수 없다는 한계점이 있다.  
+또한 내부 IP만 잡아내고 있다는 단점이 있었다.
+
+- External IP   
+따라서, 외부 IP의 경우 지금 접속해있는 IP의 공인 IP를 던져주는 `ifconfig.me`라는 사이트가 존재한다.  
+이를 통해 `curl -4 ifconfig.me`를 하면 외부 IP를 Prefix없이 가져올 수 있다.
+
+- Internal IP  
+내부 IP의 경우 외부 인터넷로 나갈 때 어떤 내부 IP를 사용하는지 확인하면 될 것 같다. 
+`ip route get 8.8.8.8`을 했을 때 결과가 `8.8.8.8 via <gateway> dev ens5 src <internal ip> uid 0` 이런식으로 나올 수 있다. 
+따라서 7번째 결과로 Internal IP를 뽑을 수 있고, 추가적으로 3번째 결과로 gateway까지 뽑아낼 수 있다.  
+Internal IP : `ip route get 8.8.8.8 | awk {print $7}`  
+Gateway : `ip route get 8.8.8.8 | awk {print $3}`
+
+**3. 2-Play 구조로 수집과 Excel 생성 분리**
+
+하나의 플레이북 안에서 역할을 명확히 분리했다.  
+첫 번째 Play는 `hosts: all`로 모든 서버를 대상으로 사양을 수집하고, 두 번째 Play는 `hosts: localhost`로 수집된 JSON을 기반으로 Excel을 생성한다.
+
+```yaml
+- name: Get Server Spec        # Play 1: 전체 서버 수집
+  hosts: all
+  roles:
+    - server_spec
+
+- name: Generate Server Spec Excel  # Play 2: 로컬에서 Excel 생성
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - server_spec_excel
+```
+
+**4. Docker 기반 Excel 변환**
+
+제어 노드에 Python 패키지(`openpyxl`)를 직접 설치하는 대신, Docker 이미지로 실행 환경을 격리했다.  
+실행 후 이미지를 즉시 삭제해 로컬 환경을 오염시키지 않는다.
+
+```yaml
+- name: Build Excel generator Docker image
+  command: docker build -f server_spec.Dockerfile -t {{ excel_image_name }}:{{ excel_image_version }} .
+
+- name: Generate Excel from JSON files
+  command: docker run --rm -v {{ playbook_dir }}/output:/app {{ excel_image_name }}:{{ excel_image_version }}
+
+- name: Remove Docker image
+  command: docker rmi {{ excel_image_name }}:{{ excel_image_version }}
+```
+
+**5. 수집 완료 후 JSON 정리**
+
+Excel 생성이 끝난 뒤 중간 산출물인 JSON 파일들을 `find` 모듈로 탐색 후 삭제한다.  
+`output/xlsx/`에는 Excel만 남고 JSON은 자동으로 제거된다.
+
+---
+
+### 롤 구조
+
+```
+roles/
+├── server_spec/
+│   ├── defaults/
+│   │   └── main.yml          # 내부 IP prefix 기본값
+│   └── tasks/
+│       └── main.yml          # 사양 수집 태스크 전체
+│
+└── server_spec_excel/
+    ├── defaults/
+    │   └── main.yml          # Docker 이미지명/버전
+    ├── files/
+    │   ├── make_server_spec_excel.py   # JSON → Excel 변환 스크립트
+    │   └── server_spec.Dockerfile      # Python + openpyxl 이미지
+    └── tasks/
+        └── main.yml          # Docker 빌드 → 실행 → 정리
+```
+
+---
+
+### 실행 방법
+
+```bash
+ansible-playbook -i inventory/hosts.yml server-spec-playbook.yml
+```
+
+또는 셸 스크립트로 실행:
+
+```bash
+./shell/run_server_spec.sh
+```
+
+실행이 완료되면 `output/xlsx/server-spec-{날짜}.xlsx` 파일이 생성된다.
+
+---
+
+### Excel 결과
+
+| 컬럼 | 설명 |
+|---|---|
+| Server | 인벤토리 호스트명 |
+| Hostname | 서버 실제 hostname |
+| Internal IP | 사내 내부망 IP |
+| OS | OS 이름 및 버전 |
+| CPU Model | CPU 모델명 |
+| CPU Core Count | 전체 코어 수 |
+| CPU Thread/Core | 코어당 스레드 수 |
+| RAM | 총 메모리 용량 |
+| Disk | 디스크 목록 (이름/타입/크기/모델) |
+
+---
 # 트러블 슈팅
 
 
