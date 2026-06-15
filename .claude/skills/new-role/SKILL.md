@@ -4,6 +4,8 @@ description: 새 Ansible role의 표준 디렉토리 구조와 기본 파일들�
 argument-hint: "<role-name>  예: k8s_containerd"
 ---
 
+> 실행 전 `.claude/docs/conventions.md`를 읽어라.
+
 # 새 Ansible Role 생성
 
 ## 표준 구조 생성
