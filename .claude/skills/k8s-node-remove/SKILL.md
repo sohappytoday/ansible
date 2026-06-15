@@ -61,8 +61,8 @@ kubectl delete node <node-name>
 `terraform/variables.tf`에서 노드 수 감소 후:
 
 ```bash
-terraform -chdir=terraform plan   # 삭제 대상 확인
-terraform -chdir=terraform apply  # 승인 후 실행
+cd ~/terraform/templates && terraform plan --var-file=control-plane.tfvars --var-file=worker-node.tfvars   # 삭제 대상 확인
+cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --var-file=worker-node.tfvars  # 승인 후 실행
 ```
 
 ### 5단계: 인벤토리 갱신
