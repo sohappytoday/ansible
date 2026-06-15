@@ -1,0 +1,76 @@
+---
+# install_kubernetes — 진입점
+# conventions.md의 분기 패턴을 따른다.
+# 실행 순서 주의: LB(VIP)는 control-plane-init 보다 먼저 떠야 한다.
+#   kubeadm init --control-plane-endpoint {VIP}:6443 시점에 VIP가 살아있어야 하기 때문.
+
+- name: Check OS family
+  assert:
+    that:
+      - ansible_os_family in ["Debian", "RedHat"]
+    fail_msg: "지원하지 않는 OS: {{ ansible_os_family }}"
+
+# === K8s 노드(control_plane, worker) 전용 단계 — LB 노드는 제외 ===
+
+# 1. 사전 준비 (swap off, 커널 모듈, sysctl)
+- import_tasks: prerequisites.yml
+  when: inventory_hostname not in (groups['loadbalancers'] | default([]))
+
+# 2. CRI 설치
+- import_tasks: cri-containerd.yml
+  when:
+    - install_kubernetes_cri_type == "containerd"
+    - inventory_hostname not in (groups['loadbalancers'] | default([]))
+
+- import_tasks: cri-crio.yml
+  when:
+    - install_kubernetes_cri_type == "crio"
+    - inventory_hostname not in (groups['loadbalancers'] | default([]))
+
+- import_tasks: cri-docker.yml
+  when:
+    - install_kubernetes_cri_type == "docker"
+    - inventory_hostname not in (groups['loadbalancers'] | default([]))
+
+# 3. kubeadm, kubelet, kubectl 설치
+- import_tasks: install.yml
+  when: inventory_hostname not in (groups['loadbalancers'] | default([]))
+
+# === HA: LB(VIP) 를 먼저 구성 (loadbalancers 그룹, cp_count >= 3) ===
+- import_tasks: lb.yml
+  when:
+    - install_kubernetes_cp_count | int >= 3
+    - inventory_hostname in (groups['loadbalancers'] | default([]))
+
+# === 클러스터 구성 ===
+
+# 4. Control Plane 초기화 (첫 번째 CP 노드에서만)
+- import_tasks: control-plane-init.yml
+  when: inventory_hostname == groups['control_plane'][0]
+
+# 5. 나머지 CP join (HA 구성 시에만)
+- import_tasks: control-plane-join.yml
+  when:
+    - install_kubernetes_cp_count | int >= 3
+    - inventory_hostname in groups['control_plane']
+    - inventory_hostname != groups['control_plane'][0]
+
+# 6. Worker 노드 join
+- import_tasks: worker-join.yml
+  when: inventory_hostname in groups['worker_nodes']
+
+# 7. CNI 설치 (첫 번째 CP에서만 실행)
+- import_tasks: cni-calico.yml
+  when:
+    - install_kubernetes_cni_type == "calico"
+    - inventory_hostname == groups['control_plane'][0]
+
+- import_tasks: cni-flannel.yml
+  when:
+    - install_kubernetes_cni_type == "flannel"
+    - inventory_hostname == groups['control_plane'][0]
+
+- import_tasks: cni-cilium.yml
+  when:
+    - install_kubernetes_cni_type == "cilium"
+    - inventory_hostname == groups['control_plane'][0]

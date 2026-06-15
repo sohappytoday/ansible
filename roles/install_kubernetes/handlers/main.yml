@@ -1,0 +1,22 @@
+---
+- name: restart kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: true
+
+- name: restart containerd
+  systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: true
+
+- name: restart haproxy
+  systemd:
+    name: haproxy
+    state: restarted
+
+- name: restart keepalived
+  systemd:
+    name: keepalived
+    state: restarted

@@ -1,0 +1,42 @@
+---
+# install_kubernetes 기본 변수
+# inventory/cluster-hosts.yml vars 섹션에서 오버라이드
+
+# 노드 구성
+install_kubernetes_cp_count: 1       # 1(단순) 또는 3 이상 홀수(HA)
+install_kubernetes_worker_count: 2
+
+# K8s 버전 (1.24 이상, 마이너 버전 지정) — pkgs.k8s.io 저장소 스트림 결정
+install_kubernetes_version: "1.30"
+# 패키지 패치 버전 고정 (선택). 비우면 스트림 최신
+#   apt 예 "1.30.5-1.1" / dnf 예 "1.30.5"
+install_kubernetes_k8s_patch_version: ""
+
+# Container Runtime: containerd | crio | docker
+install_kubernetes_cri_type: "containerd"
+
+# CRI 버전 — 종류별로 분리, 모두 비우면 최신/기본 스트림 설치
+#  containerd: 패키지 버전 (apt 예 "1.7.22-1" / dnf 예 "1.7.22-3.1.el9")
+install_kubernetes_containerd_version: ""
+#  CRI-O: crio_stream = 저장소 마이너 스트림 (비우면 'v' + k8s_version)
+#         crio_version = 패키지 패치 버전 고정 (선택, 예 "1.30.5")
+install_kubernetes_crio_stream: ""
+install_kubernetes_crio_version: ""
+#  Docker: Docker Engine 버전 + cri-dockerd 버전 (2개 분리)
+install_kubernetes_docker_version: ""        # 예 "5:27.3.1-1~ubuntu.24.04~noble"
+install_kubernetes_cri_dockerd_version: ""   # 예 "0.4.3" (비우면 GitHub 최신)
+
+# CNI: calico | flannel | cilium
+install_kubernetes_cni_type: "calico"
+install_kubernetes_pod_cidr: ""      # 비우면 CNI별 기본값 자동 적용
+install_kubernetes_service_cidr: "10.96.0.0/12"
+# CNI 버전 (비우면 최신)
+install_kubernetes_calico_version: ""   # 예 "v3.29.0" (비우면 GitHub 최신)
+install_kubernetes_flannel_version: ""  # 예 "v0.26.0" (비우면 latest)
+install_kubernetes_cilium_version: ""   # 예 "1.16.5" (비우면 최신 차트)
+
+# HA 구성 시에만 필요
+install_kubernetes_vip: ""           # cp_count >= 3 일 때 설정
+install_kubernetes_apiserver_port: 6443         # HAProxy frontend / apiserver 포트
+install_kubernetes_keepalived_vrid: 51          # VRRP virtual_router_id (서브넷 내 고유)
+install_kubernetes_keepalived_auth_pass: "k8svip42"  # VRRP 인증 암호
