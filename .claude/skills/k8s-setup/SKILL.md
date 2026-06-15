@@ -4,12 +4,31 @@ description: 신규 Kubernetes HA 클러스터를 처음부터 구축한다. K8s
 argument-hint: "[단계명] config|terraform|inventory|k8s|all (기본값: all)"
 ---
 
+> 실행 전 `.claude/docs/architecture.md`를 읽어라.
+
 # K8s 신규 클러스터 구축
 
 ## 0단계: 구성 선택
 
-플레이북 실행 전 아래 3가지를 사용자에게 선택받는다.
-선택 결과를 `inventory/cluster-hosts.yml`의 `vars` 섹션에 반영한다.
+플레이북 실행 전 아래 항목들을 사용자에게 선택받는다.
+선택 결과를 `inventory/cluster-hosts.yml`의 `vars` 섹션과 `~/terraform/templates/` tfvars에 반영한다.
+
+### 노드 수
+
+```
+Control Plane 수:
+  1         → 단순 구성 (HAProxy/Keepalived 없음)
+  3 이상 홀수 → HA 구성 (HAProxy + Keepalived 필요, k8s_vip 설정 필요)
+
+Worker Node 수:
+  제한 없음 (1 이상)
+
+→ cp_count: <선택>
+→ worker_count: <선택>
+→ k8s_vip: "<VIP IP>"  # cp_count >= 3 일 때만 설정
+```
+
+> CP 수를 홀수로 유지해야 etcd 쿼럼이 보장된다. (2, 4개는 불가)
 
 ### K8s 버전
 
@@ -111,7 +130,8 @@ ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml 
 ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml
 ```
 
-내부적으로 `install_kubernetes` role의 `tasks/main.yml`이 아래 순서로 파일을 호출한다:
+내부적으로 `install_kubernetes` role의 `tasks/main.yml`이 아래 순서로 파일을 호출한다.
+`cp_count` 값에 따라 일부 단계는 조건부 실행된다.
 
 ```
 tasks/
@@ -121,13 +141,13 @@ tasks/
 ├── cri-crio.yml           ← cri_type=crio 일 때
 ├── cri-docker.yml         ← cri_type=docker 일 때
 ├── install.yml            ← kubeadm, kubelet, kubectl
-├── control-plane-init.yml ← 첫 번째 CP
-├── control-plane-join.yml ← 나머지 CP
+├── control-plane-init.yml ← 첫 번째 CP (항상 실행)
+├── control-plane-join.yml ← cp_count >= 3 일 때만 실행
 ├── worker-join.yml        ← Worker 노드
 ├── cni-calico.yml         ← cni_type=calico 일 때
 ├── cni-flannel.yml        ← cni_type=flannel 일 때
 ├── cni-cilium.yml         ← cni_type=cilium 일 때
-└── lb.yml                 ← HAProxy + Keepalived
+└── lb.yml                 ← cp_count >= 3 일 때만 실행 (HAProxy + Keepalived)
 ```
 
 ---
