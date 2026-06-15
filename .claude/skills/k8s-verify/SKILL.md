@@ -4,6 +4,8 @@ description: K8s 클러스터 전체 상태를 점검한다. 노드 상태, 시�
 argument-hint: "[점검 범위] nodes|pods|etcd|network|all (기본값: all)"
 ---
 
+> 실행 전 `.claude/docs/architecture.md`를 읽어라.
+
 # K8s 클러스터 상태 검증
 
 모든 명령은 읽기 전용. 자동 실행 가능.
