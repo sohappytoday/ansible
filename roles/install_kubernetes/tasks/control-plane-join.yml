@@ -1,0 +1,28 @@
+---
+# 추가 Control Plane join (HA 구성, cp_count >= 3)
+# main.yml에서 첫 CP를 제외한 control_plane 노드에서만 실행되도록 조건 처리됨.
+# join 명령은 첫 CP가 control-plane-init.yml에서 생성한 fact를 참조한다.
+# (--control-plane --certificate-key --cri-socket 포함)
+
+- name: Check if this node already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Join as control plane
+  command: "{{ hostvars[groups['control_plane'][0]]['control_plane_join_command'] }}"
+  when: not kubelet_conf.stat.exists
+
+# === kubeconfig (root) — 각 CP에서 kubectl 사용 가능하도록 ===
+- name: Create /root/.kube directory
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0700'
+
+- name: Set up root kubeconfig
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    mode: '0600'

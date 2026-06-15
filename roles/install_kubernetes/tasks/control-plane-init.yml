@@ -1,0 +1,85 @@
+---
+# 첫 번째 Control Plane 초기화 (kubeadm init)
+# main.yml에서 groups['control_plane'][0] 에서만 실행되도록 조건 처리됨.
+# 참고: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/
+
+- name: Check if control plane already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_admin_conf
+
+# CRI 소켓 / Pod CIDR 결정 (종류별 매핑)
+- name: Set CRI socket and pod CIDR
+  set_fact:
+    cri_socket: "{{ cri_socket_map[install_kubernetes_cri_type] }}"
+    pod_cidr: "{{ install_kubernetes_pod_cidr if install_kubernetes_pod_cidr | length > 0 else pod_cidr_map[install_kubernetes_cni_type] }}"
+  vars:
+    cri_socket_map:
+      containerd: "unix:///var/run/containerd/containerd.sock"
+      crio: "unix:///var/run/crio/crio.sock"
+      docker: "unix:///var/run/cri-dockerd.sock"
+    pod_cidr_map:
+      calico: "192.168.0.0/16"
+      flannel: "10.244.0.0/16"
+      cilium: "10.0.0.0/8"
+
+# kubeadm 바이너리 버전을 그대로 사용 (인터넷 stable.txt 조회 회피, 버전 고정)
+- name: Get installed kubeadm version
+  command: kubeadm version -o short
+  register: kubeadm_version
+  changed_when: false
+
+# === kubeadm init ===
+# HA(cp_count >= 3): --control-plane-endpoint(VIP) + --upload-certs 추가
+- name: Run kubeadm init
+  command: >
+    kubeadm init
+    --kubernetes-version {{ kubeadm_version.stdout }}
+    --cri-socket {{ cri_socket }}
+    --pod-network-cidr {{ pod_cidr }}
+    --service-cidr {{ install_kubernetes_service_cidr }}
+    {% if install_kubernetes_cp_count | int >= 3 %}--control-plane-endpoint {{ install_kubernetes_vip }}:6443 --upload-certs{% endif %}
+  when: not kubeadm_admin_conf.stat.exists
+  register: kubeadm_init
+
+# === kubeconfig (root) ===
+- name: Create /root/.kube directory
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0700'
+
+- name: Set up root kubeconfig
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    mode: '0600'
+
+# === join 정보 생성 ===
+# init 여부와 무관하게 항상 생성한다 (다른 노드가 참조할 수 있도록).
+# 생성된 fact는 첫 CP의 hostvars에 남아 join 단계에서 사용된다.
+- name: Generate worker join command
+  command: kubeadm token create --print-join-command
+  register: worker_join
+  changed_when: false
+
+- name: Set worker join command fact
+  set_fact:
+    worker_join_command: "{{ worker_join.stdout }}"
+
+# CP join (HA만): certificate-key를 새로 업로드하고 join 명령 조립
+- name: Upload control plane certs and get certificate key
+  command: kubeadm init phase upload-certs --upload-certs
+  register: upload_certs
+  changed_when: false
+  when: install_kubernetes_cp_count | int >= 3
+
+- name: Set control plane join command fact
+  set_fact:
+    control_plane_join_command: >-
+      {{ worker_join.stdout }}
+      --control-plane
+      --certificate-key {{ upload_certs.stdout_lines[-1] }}
+      --cri-socket {{ cri_socket }}
+  when: install_kubernetes_cp_count | int >= 3
