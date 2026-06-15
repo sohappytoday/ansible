@@ -4,6 +4,8 @@ description: K8s 클러스터에서 노드를 안전하게 제거한다. drain �
 argument-hint: "<node-name>  예: worker3"
 ---
 
+> 실행 전 `.claude/docs/architecture.md`를 읽어라.
+
 # K8s 노드 제거
 
 > **경고**: 이 작업은 되돌리기 어렵다. 각 단계 실행 전 반드시 사용자에게 설명하고 승인을 받는다.
