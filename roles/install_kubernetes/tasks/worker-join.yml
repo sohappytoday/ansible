@@ -1,0 +1,24 @@
+---
+# Worker 노드 join
+# main.yml에서 worker_nodes 그룹에서만 실행되도록 조건 처리됨.
+# join 명령은 첫 CP가 control-plane-init.yml에서 생성한 worker_join_command fact를 참조한다.
+# (이 명령에는 --cri-socket이 없으므로 worker의 CRI 소켓을 덧붙인다)
+
+- name: Check if this node already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+# worker도 전체와 동일한 CRI를 사용 — 소켓 경로 결정
+- name: Set CRI socket
+  set_fact:
+    cri_socket: "{{ cri_socket_map[install_kubernetes_cri_type] }}"
+  vars:
+    cri_socket_map:
+      containerd: "unix:///var/run/containerd/containerd.sock"
+      crio: "unix:///var/run/crio/crio.sock"
+      docker: "unix:///var/run/cri-dockerd.sock"
+
+- name: Join as worker node
+  command: "{{ hostvars[groups['control_plane'][0]]['worker_join_command'] }} --cri-socket {{ cri_socket }}"
+  when: not kubelet_conf.stat.exists
