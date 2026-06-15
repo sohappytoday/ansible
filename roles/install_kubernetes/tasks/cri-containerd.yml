@@ -1,0 +1,105 @@
+---
+# CRI: containerd 설치 및 설정
+# containerd.io 패키지는 Docker 저장소에서 배포된다.
+# 참고: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+#       https://github.com/containerd/containerd/blob/main/docs/getting-started.md
+
+# === Ubuntu / Debian: Docker 저장소 설정 + 설치 ===
+- name: Install prerequisites for Docker repo (Debian)
+  apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Create apt keyrings directory (Debian)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker's official GPG key (Debian)
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker apt repository (Debian)
+  shell: |
+    tee /etc/apt/sources.list.d/docker.sources <<EOF
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  args:
+    creates: /etc/apt/sources.list.d/docker.sources
+  when: ansible_os_family == "Debian"
+
+- name: Update apt cache (Debian)
+  apt:
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Install containerd.io (Debian)
+  apt:
+    name: "containerd.io{{ ('=' + install_kubernetes_containerd_version) if install_kubernetes_containerd_version | length > 0 else '' }}"
+    state: present
+  when: ansible_os_family == "Debian"
+
+# === Rocky / RHEL: Docker 저장소 설정 + 설치 ===
+- name: Install dnf plugins (RedHat)
+  dnf:
+    name: dnf-plugins-core
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Add Docker repository (RedHat)
+  shell: dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+  when: ansible_os_family == "RedHat"
+
+- name: Install containerd.io (RedHat)
+  dnf:
+    name: "containerd.io{{ ('-' + install_kubernetes_containerd_version) if install_kubernetes_containerd_version | length > 0 else '' }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+# === 공통: config.toml 생성 및 systemd cgroup driver 설정 ===
+- name: Ensure containerd config directory exists
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Check if containerd config exists
+  stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config
+
+- name: Generate default containerd config
+  shell: containerd config default > /etc/containerd/config.toml
+  when: not containerd_config.stat.exists
+
+# kubeadm은 systemd cgroup driver를 권장한다.
+# containerd 1.x / 2.x 모두 기본값 SystemdCgroup = false → true 로 변경.
+- name: Enable SystemdCgroup driver
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  notify: restart containerd
+
+- name: Ensure containerd is enabled and running
+  systemd:
+    name: containerd
+    state: started
+    enabled: true
+    daemon_reload: true

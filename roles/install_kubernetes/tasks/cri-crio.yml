@@ -1,0 +1,83 @@
+---
+# CRI: CRI-O 설치 및 설정
+# CRI-O 버전은 K8s 마이너 버전과 매칭된다 (예: K8s 1.30 ↔ CRI-O v1.30).
+# 참고: https://github.com/cri-o/packaging/blob/main/README.md
+
+# 저장소 마이너 스트림: crio_stream 지정 시 사용, 비어있으면 K8s 버전 기반 (v + 마이너)
+- name: Set CRI-O repository stream
+  set_fact:
+    crio_stream: "{{ install_kubernetes_crio_stream if install_kubernetes_crio_stream | length > 0 else 'v' + install_kubernetes_version }}"
+
+# === Ubuntu / Debian ===
+- name: Install prerequisites for CRI-O repo (Debian)
+  apt:
+    name:
+      - software-properties-common
+      - curl
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Create apt keyrings directory (Debian)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Add CRI-O GPG key (Debian)
+  shell: |
+    curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_stream }}/deb/Release.key |
+      gpg --batch --yes --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/cri-o-apt-keyring.gpg
+  when: ansible_os_family == "Debian"
+
+- name: Add CRI-O apt repository (Debian)
+  copy:
+    dest: /etc/apt/sources.list.d/cri-o.list
+    content: "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_stream }}/deb/ /\n"
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Install CRI-O (Debian)
+  apt:
+    name: "cri-o{{ ('=' + install_kubernetes_crio_version) if install_kubernetes_crio_version | length > 0 else '' }}"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+# === Rocky / RHEL ===
+- name: Install container-selinux (RedHat)
+  dnf:
+    name: container-selinux
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Add CRI-O yum repository (RedHat)
+  copy:
+    dest: /etc/yum.repos.d/cri-o.repo
+    content: |
+      [cri-o]
+      name=CRI-O
+      baseurl=https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_stream }}/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_stream }}/rpm/repodata/repomd.xml.key
+    mode: '0644'
+  when: ansible_os_family == "RedHat"
+
+- name: Install CRI-O (RedHat)
+  dnf:
+    name: "cri-o{{ ('-' + install_kubernetes_crio_version) if install_kubernetes_crio_version | length > 0 else '' }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+# === 공통: 서비스 활성화 ===
+# CRI-O는 기본 cgroup driver가 systemd이므로 추가 설정이 필요 없다.
+- name: Ensure CRI-O is enabled and running
+  systemd:
+    name: crio
+    state: started
+    enabled: true
+    daemon_reload: true

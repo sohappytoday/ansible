@@ -1,0 +1,161 @@
+---
+# CRI: Docker Engine + cri-dockerd (어댑터)
+# K8s 1.24에서 dockershim이 제거되어, Docker를 CRI로 쓰려면 cri-dockerd 어댑터가 필요하다.
+# 기존 Docker 환경 마이그레이션용. 신규 구축에는 containerd/crio 권장.
+# 참고: https://mirantis.github.io/cri-dockerd/usage/install-manually/
+
+# === 1. Docker Engine 설치 (cri-dockerd의 사전 요구사항) ===
+# --- Ubuntu / Debian ---
+- name: Install prerequisites for Docker repo (Debian)
+  apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Create apt keyrings directory (Debian)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker's official GPG key (Debian)
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker apt repository (Debian)
+  shell: |
+    tee /etc/apt/sources.list.d/docker.sources <<EOF
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  args:
+    creates: /etc/apt/sources.list.d/docker.sources
+  when: ansible_os_family == "Debian"
+
+- name: Install Docker Engine (Debian)
+  apt:
+    name:
+      - "docker-ce{{ ('=' + install_kubernetes_docker_version) if install_kubernetes_docker_version | length > 0 else '' }}"
+      - "docker-ce-cli{{ ('=' + install_kubernetes_docker_version) if install_kubernetes_docker_version | length > 0 else '' }}"
+      - containerd.io
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+# --- Rocky / RHEL ---
+- name: Install dnf plugins (RedHat)
+  dnf:
+    name: dnf-plugins-core
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Add Docker repository (RedHat)
+  shell: dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+  when: ansible_os_family == "RedHat"
+
+- name: Install Docker Engine (RedHat)
+  dnf:
+    name:
+      - "docker-ce{{ ('-' + install_kubernetes_docker_version) if install_kubernetes_docker_version | length > 0 else '' }}"
+      - "docker-ce-cli{{ ('-' + install_kubernetes_docker_version) if install_kubernetes_docker_version | length > 0 else '' }}"
+      - containerd.io
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Ensure Docker is enabled and running
+  systemd:
+    name: docker
+    state: started
+    enabled: true
+
+# === 2. cri-dockerd 설치 ===
+- name: Determine architecture for cri-dockerd
+  set_fact:
+    cri_dockerd_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+# cri_dockerd_version 지정 시 사용, 비어있으면 GitHub 최신 릴리스 조회 (할루시네이션 방지)
+- name: Get latest cri-dockerd version
+  shell: >
+    curl -fsSL https://api.github.com/repos/Mirantis/cri-dockerd/releases/latest |
+    grep -oP '"tag_name": "v\K[^"]+'
+  register: cri_dockerd_latest
+  changed_when: false
+  when: install_kubernetes_cri_dockerd_version | length == 0
+
+- name: Set cri-dockerd version
+  set_fact:
+    cri_dockerd_version: "{{ install_kubernetes_cri_dockerd_version if install_kubernetes_cri_dockerd_version | length > 0 else cri_dockerd_latest.stdout }}"
+
+- name: Check if cri-dockerd is already installed
+  stat:
+    path: /usr/local/bin/cri-dockerd
+  register: cri_dockerd_bin
+
+- name: Download cri-dockerd tarball
+  get_url:
+    url: "https://github.com/Mirantis/cri-dockerd/releases/download/v{{ cri_dockerd_version }}/cri-dockerd-{{ cri_dockerd_version }}.{{ cri_dockerd_arch }}.tgz"
+    dest: "/tmp/cri-dockerd-{{ cri_dockerd_version }}.{{ cri_dockerd_arch }}.tgz"
+  when: not cri_dockerd_bin.stat.exists
+
+- name: Extract cri-dockerd
+  unarchive:
+    src: "/tmp/cri-dockerd-{{ cri_dockerd_version }}.{{ cri_dockerd_arch }}.tgz"
+    dest: /tmp
+    remote_src: true
+    creates: /tmp/cri-dockerd/cri-dockerd
+  when: not cri_dockerd_bin.stat.exists
+
+- name: Install cri-dockerd binary
+  copy:
+    src: /tmp/cri-dockerd/cri-dockerd
+    dest: /usr/local/bin/cri-dockerd
+    mode: '0755'
+    remote_src: true
+  when: not cri_dockerd_bin.stat.exists
+
+# === 3. systemd unit 설치 및 경로 보정 ===
+- name: Download cri-docker systemd units
+  get_url:
+    url: "https://raw.githubusercontent.com/Mirantis/cri-dockerd/v{{ cri_dockerd_version }}/packaging/systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: '0644'
+  loop:
+    - cri-docker.service
+    - cri-docker.socket
+  register: cri_docker_units
+
+# 패키지 기본 경로(/usr/bin)를 바이너리 설치 위치(/usr/local/bin)로 보정
+- name: Fix cri-dockerd binary path in service unit
+  replace:
+    path: /etc/systemd/system/cri-docker.service
+    regexp: '/usr/bin/cri-dockerd'
+    replace: '/usr/local/bin/cri-dockerd'
+
+- name: Enable and start cri-docker.socket
+  systemd:
+    name: cri-docker.socket
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# 정리
+- name: Clean up cri-dockerd temp files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/cri-dockerd-{{ cri_dockerd_version }}.{{ cri_dockerd_arch }}.tgz"
+    - /tmp/cri-dockerd
