@@ -1,0 +1,62 @@
+---
+# K8s 사전 준비 — swap 비활성화, 커널 모듈 로드, sysctl 설정
+# 참고: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+
+# 1. swap 비활성화
+#    kubeadm preflight check는 swap이 켜져 있으면 실패한다.
+- name: Check swap status
+  command: swapon --show
+  register: swap_status
+  changed_when: false
+
+- name: Disable swap immediately
+  command: swapoff -a
+  when: swap_status.stdout | length > 0
+
+- name: Disable swap permanently in /etc/fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^(\s*[^#\n]+\s+swap\s+.*)$'
+    replace: '# \1'
+
+# 2. 커널 모듈 로드 (overlay: 컨테이너 파일시스템, br_netfilter: 브리지 트래픽 → iptables)
+- name: Configure kernel modules to load at boot
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Get currently loaded kernel modules
+  command: lsmod
+  register: loaded_modules
+  changed_when: false
+
+- name: Load overlay module
+  command: modprobe overlay
+  when: "'overlay' not in loaded_modules.stdout"
+
+- name: Load br_netfilter module
+  command: modprobe br_netfilter
+  when: "'br_netfilter' not in loaded_modules.stdout"
+
+# 3. sysctl 설정 (브리지 트래픽 iptables 처리, IPv4 포워딩)
+#    br_netfilter 모듈이 먼저 로드되어야 net.bridge.* 파라미터가 존재한다.
+- name: Configure sysctl params for Kubernetes
+  copy:
+    dest: /etc/sysctl.d/k8s.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+    owner: root
+    group: root
+    mode: '0644'
+  register: sysctl_config
+
+- name: Apply sysctl params
+  command: sysctl --system
+  when: sysctl_config.changed
