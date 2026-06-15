@@ -9,7 +9,7 @@ Ansible + Terraform으로 Kubernetes HA 클러스터를 자동 구축·운영하
 - **인프라 프로비저닝**: Terraform
 - **구성 자동화**: Ansible
 - **Orchestration**: Kubernetes (kubeadm) — `k8s_version` 변수로 선택, **최소 1.24**
-- **Container Runtime**: containerd / CRI-O — `cri_type` 변수로 선택
+- **Container Runtime**: containerd / CRI-O / Docker(cri-dockerd) — `cri_type` 변수로 선택
 - **CNI**: Calico / Flannel / Cilium — `cni_type` 변수로 선택
 - **LB**: HAProxy + Keepalived (VIP)
 - **etcd**: stacked (Control Plane 내장)
@@ -34,7 +34,7 @@ Worker Node ×N
 | Control Plane | 3개 (홀수, stacked etcd) |
 | LB VIP | `k8s_vip` 변수로 정의 |
 | K8s 버전 | `k8s_version` — 1.24 이상, 마이너 버전 지정 (예: "1.30") |
-| CRI | `cri_type`: `containerd` / `crio` |
+| CRI | `cri_type`: `containerd` / `crio` / `docker` |
 | CRI 버전 | `cri_version` — 미지정 시 최신 stable |
 | CNI | `cni_type`: `calico` / `flannel` / `cilium` |
 | Pod CIDR | `k8s_pod_cidr` — CNI별 기본값 자동 적용 |
@@ -53,33 +53,43 @@ Worker Node ×N
 ## Code Organization
 
 ```
+~/terraform/                       # VM 프로비저닝 (별도 레포)
+└── templates/                     # 실제 .tf 파일 위치 (여기서 terraform 명령 실행)
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    ├── provider.tf
+    ├── control-plane.tfvars
+    ├── worker-node.tfvars
+    └── modules/
+
 ansible/
 ├── CLAUDE.md
-├── terraform/                     # VM 프로비저닝
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
 ├── inventory/
 │   ├── cluster-hosts.yml          # Terraform output → 자동 생성
 │   └── generate-cluster-hosts.sh
-├── playbooks/
-│   ├── k8s-cluster-setup.yml
-│   ├── k8s-node-add.yml
-│   ├── k8s-node-remove.yml
-│   └── k8s-upgrade.yml
+└── install-kubernetes-playbook.yml    # K8s 클러스터 전체 구축
 └── roles/
-    ├── k8s_prerequisites/         # swap off, 커널 모듈, sysctl
-    ├── k8s_containerd/            # CRI: containerd  (cri_type=containerd)
-    ├── k8s_crio/                  # CRI: CRI-O       (cri_type=crio)
-    ├── k8s_install/               # kubeadm, kubelet, kubectl
-    ├── k8s_control_plane_init/    # 첫 번째 CP: kubeadm init
-    ├── k8s_control_plane_join/
-    ├── k8s_worker_join/
-    ├── k8s_calico/                # CNI: Calico      (cni_type=calico)
-    ├── k8s_flannel/               # CNI: Flannel     (cni_type=flannel)
-    ├── k8s_cilium/                # CNI: Cilium      (cni_type=cilium)
-    ├── k8s_haproxy/
-    └── k8s_keepalived/
+    └── install_kubernetes/
+        ├── defaults/
+        │   └── main.yml                   # k8s_version, cri_type, cni_type 등 기본값
+        ├── handlers/
+        │   └── main.yml
+        ├── tasks/
+        │   ├── main.yml                   # 진입점 — 순서대로 import_tasks
+        │   ├── prerequisites.yml          # swap off, 커널 모듈, sysctl
+        │   ├── cri-containerd.yml         # CRI: containerd  (cri_type=containerd)
+        │   ├── cri-crio.yml               # CRI: CRI-O       (cri_type=crio)
+        │   ├── cri-docker.yml             # CRI: Docker + cri-dockerd (cri_type=docker)
+        │   ├── install.yml                # kubeadm, kubelet, kubectl
+        │   ├── control-plane-init.yml     # 첫 번째 CP: kubeadm init
+        │   ├── control-plane-join.yml     # 나머지 CP join
+        │   ├── worker-join.yml            # Worker 노드 join
+        │   ├── cni-calico.yml             # CNI: Calico      (cni_type=calico)
+        │   ├── cni-flannel.yml            # CNI: Flannel     (cni_type=flannel)
+        │   ├── cni-cilium.yml             # CNI: Cilium      (cni_type=cilium)
+        │   └── lb.yml                     # HAProxy + Keepalived
+        └── templates/                     # 설정 파일 Jinja2 템플릿
 ```
 
 ---
