@@ -22,8 +22,8 @@ kubectl get nodes -o wide
 `terraform/variables.tf` 또는 `terraform/main.tf`에서 노드 수 변경 후:
 
 ```bash
-terraform -chdir=terraform plan   # 자동 실행 — 변경사항 확인
-terraform -chdir=terraform apply  # 승인 필요
+cd ~/terraform/templates && terraform plan --var-file=control-plane.tfvars --var-file=worker-node.tfvars   # 자동 실행 — 변경사항 확인
+cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --var-file=worker-node.tfvars  # 승인 필요
 ```
 
 ### 2단계: 인벤토리 갱신
