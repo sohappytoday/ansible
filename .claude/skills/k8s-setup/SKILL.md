@@ -33,9 +33,12 @@ curl -s https://dl.k8s.io/release/stable.txt
 |---|---|---|
 | containerd | `containerd` | K8s 공식 권장, 가장 범용 |
 | CRI-O | `crio` | RedHat/OpenShift 생태계, 경량 |
+| Docker + cri-dockerd | `docker` | 기존 Docker 환경 마이그레이션용. K8s 1.24에서 dockershim 제거로 직접 지원 종료, cri-dockerd 어댑터를 통해 사용. 신규 구축엔 비권장 |
 
 버전 미지정(`cri_version: ""`) 시 apt/dnf 저장소 최신 stable 자동 설치.  
 특정 버전 고정 시 예: `cri_version: "1.7.0"` (containerd 기준)
+
+> `docker` 선택 시 Docker Engine + cri-dockerd 두 가지가 함께 설치된다.
 
 ### CNI
 
@@ -77,10 +80,10 @@ vars:
 
 ```bash
 # 자동 실행 가능
-terraform -chdir=terraform plan
+cd ~/terraform/templates && terraform plan --var-file=control-plane.tfvars --var-file=worker-node.tfvars
 
 # 승인 필요
-terraform -chdir=terraform apply
+cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --var-file=worker-node.tfvars
 ```
 
 ### 2단계: 인벤토리 생성
@@ -99,24 +102,33 @@ terraform -chdir=terraform apply
 
 ```bash
 ansible all -i inventory/cluster-hosts.yml -m ping
-ansible-playbook playbooks/k8s-cluster-setup.yml -i inventory/cluster-hosts.yml --check
+ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml --check
 ```
 
 ### 4단계: 클러스터 구축
 
 ```bash
-ansible-playbook playbooks/k8s-cluster-setup.yml -i inventory/cluster-hosts.yml
+ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml
 ```
 
-플레이북 내부 실행 순서:
-1. `k8s_prerequisites` — 모든 노드 (swap off, 커널 모듈, sysctl)
-2. `k8s_containerd` 또는 `k8s_crio` — `cri_type` 값에 따라 자동 선택
-3. `k8s_install` — kubeadm, kubelet, kubectl
-4. `k8s_control_plane_init` — 첫 번째 CP (kubeadm init)
-5. `k8s_control_plane_join` — 나머지 2개 CP
-6. `k8s_worker_join` — Worker 노드
-7. `k8s_calico` / `k8s_flannel` / `k8s_cilium` — `cni_type` 값에 따라 자동 선택
-8. `k8s_haproxy` + `k8s_keepalived` — LB
+내부적으로 `install_kubernetes` role의 `tasks/main.yml`이 아래 순서로 파일을 호출한다:
+
+```
+tasks/
+├── main.yml               ← import_tasks 순서 제어
+├── prerequisites.yml      ← swap off, 커널 모듈, sysctl
+├── cri-containerd.yml     ← cri_type=containerd 일 때
+├── cri-crio.yml           ← cri_type=crio 일 때
+├── cri-docker.yml         ← cri_type=docker 일 때
+├── install.yml            ← kubeadm, kubelet, kubectl
+├── control-plane-init.yml ← 첫 번째 CP
+├── control-plane-join.yml ← 나머지 CP
+├── worker-join.yml        ← Worker 노드
+├── cni-calico.yml         ← cni_type=calico 일 때
+├── cni-flannel.yml        ← cni_type=flannel 일 때
+├── cni-cilium.yml         ← cni_type=cilium 일 때
+└── lb.yml                 ← HAProxy + Keepalived
+```
 
 ---
 
