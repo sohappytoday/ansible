@@ -1,0 +1,45 @@
+---
+# CNI: Calico (Tigera operator 방식)
+# main.yml에서 cni_type=calico 이고 첫 CP에서만 실행되도록 조건 처리됨.
+# 참고: https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart
+
+- name: Set pod CIDR for Calico
+  set_fact:
+    pod_cidr: "{{ install_kubernetes_pod_cidr if install_kubernetes_pod_cidr | length > 0 else '192.168.0.0/16' }}"
+
+# 버전 결정 (비우면 GitHub 최신 릴리스 조회)
+- name: Get latest Calico version
+  shell: >
+    curl -fsSL https://api.github.com/repos/projectcalico/calico/releases/latest |
+    grep -oP '"tag_name": "\K[^"]+'
+  register: calico_latest
+  changed_when: false
+  when: install_kubernetes_calico_version | length == 0
+
+- name: Set Calico version
+  set_fact:
+    calico_version: "{{ install_kubernetes_calico_version if install_kubernetes_calico_version | length > 0 else calico_latest.stdout }}"
+
+# Tigera operator 설치 (큰 CRD 포함 → server-side apply로 멱등성 확보)
+- name: Install Tigera operator
+  command: >
+    kubectl apply --server-side
+    -f https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: tigera_operator
+  changed_when: "'unchanged' not in tigera_operator.stdout"
+
+# custom-resources 렌더링 (pod CIDR 주입) 후 적용
+- name: Render Calico custom-resources
+  template:
+    src: calico-custom-resources.yaml.j2
+    dest: /root/calico-custom-resources.yaml
+    mode: '0644'
+
+- name: Apply Calico custom-resources
+  command: kubectl apply -f /root/calico-custom-resources.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: calico_cr
+  changed_when: "'unchanged' not in calico_cr.stdout"

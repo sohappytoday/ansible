@@ -1,0 +1,40 @@
+---
+# CNI: Cilium (Helm 방식)
+# main.yml에서 cni_type=cilium 이고 첫 CP에서만 실행되도록 조건 처리됨.
+# 참고: https://docs.cilium.io/en/stable/installation/k8s-install-helm/
+
+- name: Set pod CIDR for Cilium
+  set_fact:
+    pod_cidr: "{{ install_kubernetes_pod_cidr if install_kubernetes_pod_cidr | length > 0 else '10.0.0.0/8' }}"
+
+# Helm 설치 (없을 때만)
+- name: Check if helm is installed
+  command: command -v helm
+  register: helm_check
+  changed_when: false
+  failed_when: false
+
+- name: Install helm
+  shell: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  when: helm_check.rc != 0
+
+- name: Add Cilium helm repo
+  command: helm repo add cilium https://helm.cilium.io/
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+
+- name: Update helm repos
+  command: helm repo update
+  changed_when: false
+
+# helm upgrade --install 은 멱등적
+- name: Install Cilium
+  command: >
+    helm upgrade --install cilium cilium/cilium
+    {% if install_kubernetes_cilium_version | length > 0 %}--version {{ install_kubernetes_cilium_version }}{% endif %}
+    --namespace kube-system
+    --set ipam.operator.clusterPoolIPv4PodCIDRList={{ pod_cidr }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_install
+  changed_when: "'has been upgraded' in cilium_install.stdout or 'has been installed' in cilium_install.stdout"

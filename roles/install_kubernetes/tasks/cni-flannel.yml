@@ -1,0 +1,38 @@
+---
+# CNI: Flannel
+# main.yml에서 cni_type=flannel 이고 첫 CP에서만 실행되도록 조건 처리됨.
+# 참고: https://github.com/flannel-io/flannel
+
+- name: Set pod CIDR for Flannel
+  set_fact:
+    pod_cidr: "{{ install_kubernetes_pod_cidr if install_kubernetes_pod_cidr | length > 0 else '10.244.0.0/16' }}"
+
+# 버전 지정 시 해당 릴리스, 비우면 latest
+- name: Set Flannel manifest URL
+  set_fact:
+    flannel_url: >-
+      {{ ('https://github.com/flannel-io/flannel/releases/download/' + install_kubernetes_flannel_version + '/kube-flannel.yml')
+         if install_kubernetes_flannel_version | length > 0
+         else 'https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml' }}
+
+- name: Download kube-flannel manifest
+  get_url:
+    url: "{{ flannel_url }}"
+    dest: /root/kube-flannel.yml
+    mode: '0644'
+
+# Flannel은 매니페스트에 Pod CIDR이 하드코딩(10.244.0.0/16)되어 있어
+# pod_network_cidr과 일치시켜야 한다. 기본과 다르면 치환.
+- name: Patch Flannel pod CIDR
+  replace:
+    path: /root/kube-flannel.yml
+    regexp: '10\.244\.0\.0/16'
+    replace: "{{ pod_cidr }}"
+  when: pod_cidr != '10.244.0.0/16'
+
+- name: Apply Flannel
+  command: kubectl apply -f /root/kube-flannel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: flannel_apply
+  changed_when: "'unchanged' not in flannel_apply.stdout"
