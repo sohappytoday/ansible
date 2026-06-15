@@ -1,0 +1,15 @@
+#!/bin/sh
+# apiserver health check — HAProxy frontend(localhost) 를 통해 확인.
+# 실패 시 keepalived가 priority를 낮춰(weight -2) VIP를 다른 LB로 넘긴다.
+# 참고: kubeadm ha-considerations.md
+
+errorExit() {
+    echo "*** $*" 1>&2
+    exit 1
+}
+
+curl -sfk --max-time 2 https://localhost:{{ install_kubernetes_apiserver_port }}/healthz -o /dev/null || errorExit "Error GET https://localhost:{{ install_kubernetes_apiserver_port }}/healthz"
+# 현재 노드가 VIP를 보유(MASTER)하면 VIP 경유 경로도 확인
+if ip addr | grep -q {{ install_kubernetes_vip }}; then
+    curl -sfk --max-time 2 https://{{ install_kubernetes_vip }}:{{ install_kubernetes_apiserver_port }}/healthz -o /dev/null || errorExit "Error GET https://{{ install_kubernetes_vip }}:{{ install_kubernetes_apiserver_port }}/healthz"
+fi

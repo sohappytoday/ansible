@@ -1,0 +1,29 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# Keepalived — VIP({{ install_kubernetes_vip }}) 관리
+# 참고: kubeadm ha-considerations.md
+vrrp_script check_apiserver {
+    script "/etc/keepalived/check_apiserver.sh"
+    interval 3
+    weight -2
+    fall 10
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    {# 그룹 내 최대 priority 노드를 MASTER, 나머지는 BACKUP #}
+    state {{ 'MASTER' if keepalived_priority | int == (groups['loadbalancers'] | map('extract', hostvars, 'keepalived_priority') | map('int') | max) else 'BACKUP' }}
+    interface {{ ansible_default_ipv4.interface }}
+    virtual_router_id {{ install_kubernetes_keepalived_vrid }}
+    priority {{ keepalived_priority }}
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass {{ install_kubernetes_keepalived_auth_pass }}
+    }
+    virtual_ipaddress {
+        {{ install_kubernetes_vip }}
+    }
+    track_script {
+        check_apiserver
+    }
+}

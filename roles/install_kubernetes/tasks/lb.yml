@@ -1,0 +1,67 @@
+---
+# HAProxy + Keepalived (HA 구성, cp_count >= 3)
+# loadbalancers 그룹에서만 실행. VIP를 control-plane-init 전에 띄운다.
+# 참고: https://github.com/kubernetes/kubeadm/blob/main/docs/ha-considerations.md
+
+- name: Install HAProxy and Keepalived (Debian)
+  apt:
+    name:
+      - haproxy
+      - keepalived
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Install HAProxy and Keepalived (RedHat)
+  dnf:
+    name:
+      - haproxy
+      - keepalived
+    state: present
+  when: ansible_os_family == "RedHat"
+
+# === HAProxy: control plane apiserver 로드밸런싱 ===
+- name: Configure HAProxy
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: '0644'
+  notify: restart haproxy
+
+# === Keepalived: VIP 관리 ===
+- name: Ensure keepalived config directory exists
+  file:
+    path: /etc/keepalived
+    state: directory
+    mode: '0755'
+
+- name: Install apiserver health check script
+  template:
+    src: check_apiserver.sh.j2
+    dest: /etc/keepalived/check_apiserver.sh
+    mode: '0755'
+  notify: restart keepalived
+
+- name: Configure Keepalived
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    mode: '0644'
+  notify: restart keepalived
+
+# === 서비스 활성화 ===
+- name: Enable and start HAProxy
+  systemd:
+    name: haproxy
+    state: started
+    enabled: true
+
+- name: Enable and start Keepalived
+  systemd:
+    name: keepalived
+    state: started
+    enabled: true
+
+# config 변경 시 즉시 반영 — init 전에 VIP가 떠 있어야 한다
+- name: Flush handlers to apply LB config before cluster init
+  meta: flush_handlers
