@@ -1,0 +1,101 @@
+---
+# kubeadm, kubelet, kubectl 설치
+# pkgs.k8s.io 저장소 사용. 저장소 스트림은 K8s 마이너 버전과 일치한다.
+# 참고: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+# 저장소 스트림 (v + 마이너 버전), 패치 버전 접미사
+- name: Set Kubernetes repo stream and version suffix
+  set_fact:
+    k8s_repo_stream: "v{{ install_kubernetes_version }}"
+    k8s_apt_suffix: "{{ ('=' + install_kubernetes_k8s_patch_version) if install_kubernetes_k8s_patch_version | length > 0 else '' }}"
+    k8s_dnf_suffix: "{{ ('-' + install_kubernetes_k8s_patch_version) if install_kubernetes_k8s_patch_version | length > 0 else '' }}"
+
+# === Ubuntu / Debian ===
+- name: Install prerequisites for Kubernetes repo (Debian)
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Create apt keyrings directory (Debian)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == "Debian"
+
+- name: Add Kubernetes GPG key (Debian)
+  shell: |
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_stream }}/deb/Release.key |
+      gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  when: ansible_os_family == "Debian"
+
+- name: Add Kubernetes apt repository (Debian)
+  copy:
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_stream }}/deb/ /\n"
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Install kubelet, kubeadm, kubectl (Debian)
+  apt:
+    name:
+      - "kubelet{{ k8s_apt_suffix }}"
+      - "kubeadm{{ k8s_apt_suffix }}"
+      - "kubectl{{ k8s_apt_suffix }}"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+# 버전 skew 방지 — apt 자동 업그레이드 차단
+- name: Hold Kubernetes packages (Debian)
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+  when: ansible_os_family == "Debian"
+
+# === Rocky / RHEL ===
+- name: Add Kubernetes yum repository (RedHat)
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_stream }}/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/{{ k8s_repo_stream }}/rpm/repodata/repomd.xml.key
+      exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+    mode: '0644'
+  when: ansible_os_family == "RedHat"
+
+# exclude로 잠긴 패키지를 설치 시에만 해제 (--disableexcludes)
+- name: Install kubelet, kubeadm, kubectl (RedHat)
+  dnf:
+    name:
+      - "kubelet{{ k8s_dnf_suffix }}"
+      - "kubeadm{{ k8s_dnf_suffix }}"
+      - "kubectl{{ k8s_dnf_suffix }}"
+    state: present
+    disable_excludes: kubernetes
+  when: ansible_os_family == "RedHat"
+
+# === 공통: kubelet 활성화 ===
+# kubeadm init/join 전에는 kubelet이 설정 파일 없이 crashloop 상태가 정상이다.
+- name: Enable kubelet
+  systemd:
+    name: kubelet
+    state: started
+    enabled: true
+    daemon_reload: true
