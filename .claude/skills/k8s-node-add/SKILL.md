@@ -5,6 +5,8 @@ argument-hint: "<node-type> <node-name>  예: worker worker3 | control-plane cp4
 next-skill: k8s-verify
 ---
 
+> 실행 전 `.claude/docs/architecture.md`를 읽어라.
+
 # K8s 노드 추가
 
 ## 현재 상태 확인
