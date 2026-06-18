@@ -3,7 +3,8 @@
 # 실행 전에 terraform apply가 완료되어 있어야 한다.
 
 TERRAFORM_DIR="/home/ubuntu/terraform/templates"
-OUTPUT_FILE="$(dirname "$0")/cluster-hosts.yml"
+OUTPUT_FILE="$(cd "$(dirname "$0")" && pwd)/cluster-hosts.yml"
+SSH_KEY="~/.ssh/terraform-key"
 
 cd "$TERRAFORM_DIR" || { echo "terraform 디렉토리를 찾을 수 없습니다: $TERRAFORM_DIR"; exit 1; }
 
@@ -34,6 +35,7 @@ all:
           ansible_host: $CONTROL_PLANE_IP
           ansible_port: 22
           ansible_user: $SSH_USER
+          ansible_ssh_private_key_file: $SSH_KEY
           ansible_become: true
           ansible_become_method: sudo
           ansible_become_user: root
@@ -47,10 +49,11 @@ echo "$WORKER_PRIVATE_IPS" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while 
           ansible_host: $ip
           ansible_port: 22
           ansible_user: $SSH_USER
+          ansible_ssh_private_key_file: $SSH_KEY
           ansible_become: true
           ansible_become_method: sudo
           ansible_become_user: root
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@$CONTROL_PLANE_IP'
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i $SSH_KEY -W %h:%p -q -o StrictHostKeyChecking=no $SSH_USER@$CONTROL_PLANE_IP"'
 EOF
 done
 
