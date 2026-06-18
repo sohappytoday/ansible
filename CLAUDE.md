@@ -11,6 +11,7 @@ Ansible + Terraform으로 Kubernetes 클러스터를 자동 구축·운영하는
 - CNI — `cni_type`: calico / flannel / cilium
 - LB — HAProxy + Keepalived (cp_count ≥ 3인 HA 구성 시에만)
 - OS — Ubuntu / Rocky Linux / RHEL
+- worker 폐쇄망 — worker가 인터넷 차단 시 `install_kubernetes_offline_worker: true` (CP 경유 오프라인 설치, 상세 `.claude/docs/architecture.md`)
 
 ## 안전 규칙
 

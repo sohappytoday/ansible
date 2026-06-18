@@ -85,9 +85,42 @@ ansible/
         │   ├── cni-calico.yml             # cni_type=calico
         │   ├── cni-flannel.yml            # cni_type=flannel
         │   ├── cni-cilium.yml             # cni_type=cilium
-        │   └── lb.yml                     # cp_count >= 3 일 때만
+        │   ├── lb.yml                     # cp_count >= 3 일 때만
+        │   ├── offline-prepare-packages.yml  # [CP] worker용 .deb 다운로드
+        │   ├── offline-install-packages.yml  # [worker] .deb 오프라인 설치
+        │   ├── offline-prepare-images.yml    # [CP] 이미지 export
+        │   └── offline-install-images.yml    # [worker] 이미지 import
         └── templates/
 ```
+
+---
+
+## 폐쇄망 worker 오프라인 설치
+
+worker가 인터넷 아웃바운드 차단(private subnet) 환경이면 `install_kubernetes_offline_worker: true`로 설정한다.
+worker는 인터넷 설치(cri/install)를 건너뛰고, CP에서 받은 .deb/이미지로 오프라인 설치한다.
+
+| 변수 | 설명 |
+|---|---|
+| `install_kubernetes_offline_worker` | true면 worker 오프라인 경로 (기본 false) |
+
+**전제:** CP와 worker가 동일 OS/아키텍처 (Ubuntu 24.04 / amd64 등) → .deb·이미지 호환
+
+**흐름:**
+```
+CP (인터넷 O)
+  ├─ 인터넷 설치 (containerd, kubeadm…)
+  ├─ offline-prepare-packages → worker용 .deb 다운로드 → 제어노드로 fetch
+  ├─ control-plane-init → CNI 설치 → CP에 이미지 캐시
+  └─ offline-prepare-images → pause/kube-proxy/CNI 이미지 export → 제어노드로 fetch
+
+worker (인터넷 X)
+  ├─ offline-install-packages → .deb 복사 → 로컬 설치 (apt-get install ./*.deb)
+  ├─ offline-install-images → 이미지 tar 복사 → ctr import
+  └─ worker-join (이미지 준비 후)
+```
+
+> 실행 순서상 worker-join은 CNI 설치 + 이미지 import 이후에 실행된다 (online/offline 공통).
 
 ---
 
