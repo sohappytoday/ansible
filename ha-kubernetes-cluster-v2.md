@@ -15,6 +15,7 @@ Ansible + Terraform으로 kubeadm 기반 Kubernetes 클러스터를 자동 구�
 
 - [개요](#개요)
 - [실행 방법](#실행-방법)
+- [검증 결과](#검증-결과)
 - [트러블 슈팅](#트러블-슈팅)
   - [1. Worker Node ↔ Control Plane SG Inbound](#1-worker-node--control-plane-sg-inbound)
   - [2. 대용량 파일 전송 중 Control Plane OOM](#2-대용량-파일-전송-중-control-plane-oom)
@@ -48,6 +49,37 @@ ansible all -i inventory/cluster-hosts.yml -m ping
 # 3. 클러스터 구축
 ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml
 ```
+
+---
+
+# 검증 결과
+
+## 노드 구성
+
+![노드 구성](images/k8s-cluster/cluster-node.png)
+
+`kubectl get nodes -o wide` 결과. 의도한 대로 **containerd**·**Ubuntu** 버전이 맞고, **Control Plane은 public subnet(`10.0.1.0/24`)**, **Worker는 private subnet(`10.0.2.0/24`)**에 위치하며, Kubernetes 버전은 **`1.34.9`**로 구성된 것을 확인할 수 있다.
+
+## 시스템 Pod
+
+![kube-system Pod](images/k8s-cluster/kube-system.png)
+
+`kube-proxy`는 3개 노드 모두에, `kube-scheduler`·`controller-manager`·`kube-apiserver`·`etcd`는 Control Plane에만 떠 있다.
+
+> 이들 컴포넌트와 `kube-proxy`는 **hostNetwork**라 노드 IP(`10.0.x`)로 보인다. 반면 `coredns`는 일반 Pod라 **Calico Pod 네트워크 CIDR(기본 `192.168.0.0/16`)**에서 IP를 받기 때문에 `192.168.x`로 표시된다 — 정상이다.
+
+## 폐쇄망 입증
+
+![폐쇄망 Pod 스케줄](images/k8s-cluster/pod.png)
+
+BMT용으로 직접 만든 이미지(`*.tar.gz`)를 **worker-1에만** `scp`로 전달해 푼 뒤, Control Plane에서 YAML로 Deployment(replica 3)와 Service를 올렸다.  
+그 결과 이미지가 있는 **worker-1의 Pod만 `Running`**, 이미지가 없는 **worker-2의 Pod는 `ImagePullError`**가 떴다. Worker가 인터넷 없이 **로컬에 적재된 이미지에만 의존하는 폐쇄망임을 입증**한 셈이다.
+
+## Service
+
+![Service](images/k8s-cluster/service.png)
+
+`kubectl get svc` 결과.
 
 ---
 
