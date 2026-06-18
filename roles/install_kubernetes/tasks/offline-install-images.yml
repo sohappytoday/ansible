@@ -1,0 +1,18 @@
+---
+# [worker] CP에서 받은 컨테이너 이미지를 containerd로 import (폐쇄망)
+# join 전에 실행해야 kube-proxy/CNI Pod가 로컬 이미지를 사용한다.
+
+- name: Copy image tar to worker
+  copy:
+    src: "{{ install_kubernetes_offline_local_dir }}/images/worker-images.tar"
+    dest: "{{ install_kubernetes_offline_worker_img_tar }}"
+    mode: '0644'
+
+- name: Import images into containerd k8s.io namespace (worker)
+  shell: ctr -n k8s.io images import {{ install_kubernetes_offline_worker_img_tar }}
+  changed_when: true
+
+- name: Clean up image tar on worker
+  file:
+    path: "{{ install_kubernetes_offline_worker_img_tar }}"
+    state: absent

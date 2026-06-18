@@ -1,0 +1,76 @@
+---
+# [CP] worker(폐쇄망)용 컨테이너 이미지 export
+# CNI 설치 후 CP에 캐시된 이미지(pause/kube-proxy/CNI)를 추출한다.
+# DaemonSet(kube-proxy, calico-node 등)은 CP에도 스케줄되므로 CP에 이미지가 pull된다.
+# 멱등성: controller에 archive가 이미 있으면 export/fetch를 건너뛴다.
+
+- name: Check if image relay archive already exists on controller
+  stat:
+    path: "{{ install_kubernetes_offline_local_dir }}/images/worker-images.tar"
+  delegate_to: localhost
+  become: false
+  register: offline_img_archive_stat
+
+# CNI 이미지가 CP에 모두 pull될 때까지 대기 (operator 배포에 시간 소요)
+# 주의: operator(calico tigera 등)는 이미지를 "순차적으로" 받는다.
+#   단순히 'CNI 이미지 1개 이상' 조건으로 통과하면, node/cni/csi가 아직 안 받아진
+#   불완전한 시점의 목록을 export하게 된다 (worker calico-node ImagePullBackOff 유발).
+# 따라서 이미지 개수가 "안정화"(연속 3회 폴링 동안 변동 없음)될 때까지 기다린다.
+- name: Wait until CNI images on CP stabilize (operator finished pulling)
+  shell: |
+    prev=-1; stable=0
+    for i in $(seq 1 60); do
+      cur=$(ctr -n k8s.io images ls -q | grep -E 'calico|flannel|cilium' | grep -v '@sha256' | sort -u | wc -l)
+      if [ "$cur" -gt 0 ] && [ "$cur" -eq "$prev" ]; then
+        stable=$((stable + 1))
+      else
+        stable=0
+      fi
+      if [ "$stable" -ge 3 ]; then
+        echo "CNI images stabilized at $cur (no change for 30s)"
+        exit 0
+      fi
+      prev=$cur
+      sleep 10
+    done
+    echo "timeout: CNI image count did not stabilize (last=$prev)" >&2
+    exit 1
+  args:
+    executable: /bin/bash
+  register: cni_img_wait
+  changed_when: false
+  when: not offline_img_archive_stat.stat.exists
+
+# worker가 필요로 하는 이미지: pause, kube-proxy, CNI 이미지
+- name: List worker-needed images on CP
+  shell: ctr -n k8s.io images ls -q | grep -E 'pause|kube-proxy|calico|flannel|cilium' | sort -u
+  register: offline_worker_images
+  changed_when: false
+  when: not offline_img_archive_stat.stat.exists
+
+- name: Export worker images on CP
+  shell: >
+    ctr -n k8s.io images export {{ install_kubernetes_offline_cp_img_tar }}
+    {{ offline_worker_images.stdout_lines | join(' ') }}
+  changed_when: true
+  when: not offline_img_archive_stat.stat.exists
+
+- name: Ensure local image relay dir exists on controller
+  file:
+    path: "{{ install_kubernetes_offline_local_dir }}/images"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  become: false
+
+- name: Fetch image tar to controller via scp
+  shell: >
+    scp -i {{ ansible_ssh_private_key_file }}
+    -o StrictHostKeyChecking=no
+    -o UserKnownHostsFile=/dev/null
+    {{ ansible_user }}@{{ ansible_host }}:{{ install_kubernetes_offline_cp_img_tar }}
+    {{ install_kubernetes_offline_local_dir }}/images/worker-images.tar
+  delegate_to: localhost
+  become: false
+  changed_when: true
+  when: not offline_img_archive_stat.stat.exists

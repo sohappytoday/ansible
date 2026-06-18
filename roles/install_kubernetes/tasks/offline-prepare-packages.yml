@@ -1,0 +1,72 @@
+---
+# [CP] worker(폐쇄망)용 .deb 패키지를 의존성과 함께 다운로드한다.
+# CP에 이미 추가된 docker/k8s 저장소를 사용하며, --reinstall로 "설치된 버전"의 .deb를 확보한다.
+# (CP와 worker가 동일 OS/아키텍처라는 전제 → .deb 호환)
+# 멱등성: controller에 archive가 이미 있으면 download/archive/fetch를 전부 건너뛴다
+# (CP는 메모리가 부족한 경우가 많으므로 재실행 시 불필요한 대용량 연산을 방지)
+
+- name: Check if .deb relay archive already exists on controller
+  stat:
+    path: "{{ install_kubernetes_offline_local_dir }}/debs/worker-debs.tar.gz"
+  delegate_to: localhost
+  become: false
+  register: offline_deb_archive_stat
+
+- name: Create worker deb cache directory on CP
+  file:
+    path: "{{ install_kubernetes_offline_cp_deb_dir }}/partial"
+    state: directory
+    mode: '0755'
+  when: not offline_deb_archive_stat.stat.exists
+
+# containerd.io / kubelet / kubeadm 및 K8s 노드 공통 의존성을 받는다.
+# 이미 CP에 설치된 버전과 동일한 .deb를 받으므로 worker도 같은 버전이 설치된다.
+- name: Download worker .deb packages with dependencies (CP)
+  shell: >
+    apt-get install -y --download-only --reinstall
+    -o Dir::Cache::archives={{ install_kubernetes_offline_cp_deb_dir }}
+    containerd.io kubelet kubeadm kubectl kubernetes-cni cri-tools
+    conntrack ethtool socat iptables
+  changed_when: true
+  when: not offline_deb_archive_stat.stat.exists
+
+- name: Find downloaded .deb files
+  find:
+    paths: "{{ install_kubernetes_offline_cp_deb_dir }}"
+    patterns: "*.deb"
+  register: offline_worker_debs
+  when: not offline_deb_archive_stat.stat.exists
+
+- name: Show downloaded package count
+  debug:
+    msg: "worker용 .deb {{ offline_worker_debs.files | length }}개 준비됨 ({{ install_kubernetes_offline_cp_deb_dir }})"
+  when: not offline_deb_archive_stat.stat.exists
+
+# 제어 노드로 가져와 worker에 분배할 준비 (fetch → copy 중계)
+- name: Ensure local relay dir exists on controller
+  file:
+    path: "{{ install_kubernetes_offline_local_dir }}/debs"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  become: false
+
+- name: Archive .deb files on CP for transfer
+  shell: >
+    tar czf {{ install_kubernetes_offline_cp_deb_dir }}.tar.gz
+    -C {{ install_kubernetes_offline_cp_deb_dir }}
+    $(cd {{ install_kubernetes_offline_cp_deb_dir }} && ls *.deb)
+  changed_when: true
+  when: not offline_deb_archive_stat.stat.exists
+
+- name: Fetch .deb archive to controller via scp
+  shell: >
+    scp -i {{ ansible_ssh_private_key_file }}
+    -o StrictHostKeyChecking=no
+    -o UserKnownHostsFile=/dev/null
+    {{ ansible_user }}@{{ ansible_host }}:{{ install_kubernetes_offline_cp_deb_dir }}.tar.gz
+    {{ install_kubernetes_offline_local_dir }}/debs/worker-debs.tar.gz
+  delegate_to: localhost
+  become: false
+  changed_when: true
+  when: not offline_deb_archive_stat.stat.exists

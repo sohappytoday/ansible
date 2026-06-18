@@ -1,0 +1,69 @@
+---
+# [worker] CP에서 받은 .deb로 오프라인 설치 (폐쇄망)
+# 제어 노드의 worker-debs.tar.gz를 worker로 복사 → 압축 해제 → 로컬 설치.
+
+- name: Create worker deb directory
+  file:
+    path: "{{ install_kubernetes_offline_worker_deb_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy .deb archive to worker
+  copy:
+    src: "{{ install_kubernetes_offline_local_dir }}/debs/worker-debs.tar.gz"
+    dest: "{{ install_kubernetes_offline_worker_deb_dir }}/worker-debs.tar.gz"
+    mode: '0644'
+
+- name: Extract .deb archive on worker
+  unarchive:
+    src: "{{ install_kubernetes_offline_worker_deb_dir }}/worker-debs.tar.gz"
+    dest: "{{ install_kubernetes_offline_worker_deb_dir }}"
+    remote_src: true
+
+# 로컬 .deb만으로 설치. dpkg -i는 인터넷 없이 바로 설치하므로 폐쇄망에 적합.
+# 의존성 순서 문제로 1회 실패 후 재시도하는 패턴 사용.
+- name: Install packages from local .deb files
+  shell: dpkg -i {{ install_kubernetes_offline_worker_deb_dir }}/*.deb || dpkg -i {{ install_kubernetes_offline_worker_deb_dir }}/*.deb
+  changed_when: true
+
+# === containerd config (CRI 활성 + SystemdCgroup) ===
+- name: Ensure containerd config directory exists
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+# containerd.io 패키지는 CRI 비활성 config를 깔므로 기본 config로 덮어쓴다.
+- name: Generate default containerd config (worker)
+  shell: containerd config default > /etc/containerd/config.toml
+  changed_when: true
+
+- name: Enable SystemdCgroup driver (worker)
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+
+- name: Restart containerd (worker)
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: true
+    daemon_reload: true
+
+# === kubelet 활성화 + 버전 고정 ===
+- name: Hold Kubernetes packages (worker)
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Enable kubelet (worker)
+  systemd:
+    name: kubelet
+    state: started
+    enabled: true
+    daemon_reload: true
