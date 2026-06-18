@@ -69,18 +69,48 @@ curl -s https://dl.k8s.io/release/stable.txt
 
 `k8s_pod_cidr`을 비워두면 선택한 CNI의 기본값이 자동 적용된다.
 
-### 선택 결과 반영
+### 선택 결과 반영 (group_vars/all.yml)
 
-`inventory/cluster-hosts.yml` vars 섹션:
+> 구성 변수는 `inventory/group_vars/all.yml`에 `install_kubernetes_*` 접두사로 저장한다.
+> `cluster-hosts.yml`은 generate 스크립트가 매번 덮어쓰므로 vars를 거기 두면 날아간다.
+> **항상 먼저 `all.yml`이 있는지 + 구성이 채워져 있는지 확인하고, 없으면 0단계 선택값으로 새로 만든다.**
+
+```bash
+# 기존 구성 확인 — 없거나 비어 있으면 새로 생성
+test -s inventory/group_vars/all.yml && cat inventory/group_vars/all.yml
+```
+
+없을 경우 `inventory/group_vars/all.yml`을 아래 형식으로 생성한다:
 
 ```yaml
-vars:
-  k8s_version: "<선택>"       # 예: "1.30"
-  cri_type: "<선택>"          # containerd | crio
-  cri_version: ""             # 특정 버전 고정 시 입력, 기본값: 최신
-  cni_type: "<선택>"          # calico | flannel | cilium
-  k8s_pod_cidr: ""            # 기본값 사용 시 빈칸 유지
+---
+# install_kubernetes role 구성 변수 (0단계 선택 결과)
+install_kubernetes_cp_count: <선택>          # 1(단순) | 3+(HA 홀수)
+install_kubernetes_worker_count: <선택>
+install_kubernetes_version: "<선택>"          # 예: "1.30"
+install_kubernetes_cri_type: "<선택>"         # containerd | crio | docker
+install_kubernetes_cni_type: "<선택>"         # calico | flannel | cilium
+install_kubernetes_offline_worker: <true|false>  # worker 폐쇄망 여부
+# 선택 항목 (기본값 사용 시 생략 가능)
+# install_kubernetes_cri_version: ""          # 비우면 최신 stable
+# install_kubernetes_pod_cidr: ""             # 비우면 CNI별 기본값
+# install_kubernetes_vip: ""                  # cp_count >= 3 일 때만
 ```
+
+이미 있으면 값이 0단계 선택과 일치하는지 확인하고, 다르면 사용자 확인 후 갱신한다.
+
+---
+
+### worker 폐쇄망 여부
+
+worker 노드가 인터넷 아웃바운드 차단(private subnet) 환경이면 오프라인 설치가 필요하다.
+
+```
+→ install_kubernetes_offline_worker: true   # worker가 폐쇄망일 때
+```
+
+> true면 worker는 CP에서 .deb·이미지를 받아 설치한다. CP와 worker가 동일 OS/아키텍처여야 한다.
+> SSH도 worker는 CP 경유(ProxyCommand)로만 접근됨에 유의.
 
 ---
 
@@ -105,16 +135,24 @@ cd ~/terraform/templates && terraform plan --var-file=control-plane.tfvars --var
 cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --var-file=worker-node.tfvars
 ```
 
-### 2단계: 인벤토리 생성
+### 2단계: 인벤토리 생성 (항상 재생성)
+
+> **반드시 매 구축마다 재생성한다.** 인스턴스를 stop/start하면 public IP는 물론
+> private IP까지 바뀐다. 기존 `cluster-hosts.yml`이 있어도 신뢰하지 말고, terraform
+> output 기준으로 항상 새로 생성한 뒤 사용한다.
 
 ```bash
+# terraform output(IP)과 현재 cluster-hosts.yml이 일치하는지 먼저 비교
+cd ~/terraform/templates && terraform output
+# 일치 여부와 무관하게 항상 재생성 (드리프트 방지)
 ./inventory/generate-cluster-hosts.sh
 ```
 
 생성된 `inventory/cluster-hosts.yml` 확인:
-- control_planes 그룹 3개 노드
+- control_planes 그룹 노드 수 (단순 1 / HA 3+)
 - workers 그룹 노드 수
-- loadbalancers 그룹 2개 (keepalived_priority 100/90)
+- HA 구성 시 loadbalancers 그룹 2개 (keepalived_priority 100/90)
+- master public IP / worker private IP가 terraform output과 일치하는지
 - vars 섹션에 선택한 k8s_version, cri_type, cni_type 반영 여부
 
 ### 3단계: 연결 확인
@@ -123,6 +161,10 @@ cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --va
 ansible all -i inventory/cluster-hosts.yml -m ping
 ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml --check
 ```
+
+> ping이 `UNREACHABLE`/`Connection timed out`이면 먼저 인벤토리 IP가 terraform
+> output과 일치하는지 확인한다(2단계 재생성 누락이 가장 흔한 원인). IP가 맞는데도
+> 막히면 control-plane SG의 `ssh_allowed_cidr`에 제어노드 IP가 포함됐는지 본다.
 
 ### 4단계: 클러스터 구축
 
