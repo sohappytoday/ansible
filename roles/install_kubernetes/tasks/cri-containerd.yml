@@ -12,6 +12,10 @@
       - curl
     state: present
     update_cache: true
+  register: apt_docker_prereq
+  retries: 3
+  delay: 10
+  until: apt_docker_prereq is succeeded
   when: ansible_os_family == "Debian"
 
 - name: Create apt keyrings directory (Debian)
@@ -79,14 +83,11 @@
     state: directory
     mode: '0755'
 
-- name: Check if containerd config exists
-  stat:
-    path: /etc/containerd/config.toml
-  register: containerd_config
-
+# containerd.io 패키지는 CRI가 비활성(disabled_plugins=["cri"])인 config.toml을 설치한다.
+# 항상 기본 config로 덮어써 CRI를 활성화한다.
 - name: Generate default containerd config
   shell: containerd config default > /etc/containerd/config.toml
-  when: not containerd_config.stat.exists
+  changed_when: true
 
 # kubeadm은 systemd cgroup driver를 권장한다.
 # containerd 1.x / 2.x 모두 기본값 SystemdCgroup = false → true 로 변경.
@@ -95,11 +96,11 @@
     path: /etc/containerd/config.toml
     regexp: 'SystemdCgroup = false'
     replace: 'SystemdCgroup = true'
-  notify: restart containerd
 
-- name: Ensure containerd is enabled and running
+# config 변경을 즉시 반영해야 한다 (handler는 play 끝에 실행되어 kubeadm init보다 늦음).
+- name: Restart containerd to apply config
   systemd:
     name: containerd
-    state: started
+    state: restarted
     enabled: true
     daemon_reload: true
