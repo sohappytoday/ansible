@@ -40,3 +40,16 @@ install_kubernetes_vip: ""           # cp_count >= 3 일 때 설정
 install_kubernetes_apiserver_port: 6443         # HAProxy frontend / apiserver 포트
 install_kubernetes_keepalived_vrid: 51          # VRRP virtual_router_id (서브넷 내 고유)
 install_kubernetes_keepalived_auth_pass: "k8svip42"  # VRRP 인증 암호
+
+# 오프라인(폐쇄망) worker 설치
+# worker가 인터넷 아웃바운드 차단 환경일 때 true. CP에서 .deb/이미지를 받아 worker로 복사 설치.
+# 전제: CP와 worker가 동일 OS/아키텍처 (Ubuntu 24.04 / amd64 등)
+install_kubernetes_offline_worker: false
+# CP 임시 디렉토리 (worker용 .deb / 이미지 tar 보관)
+install_kubernetes_offline_cp_deb_dir: /tmp/k8s-worker-debs
+install_kubernetes_offline_cp_img_tar: /tmp/k8s-worker-images.tar
+# 제어 노드 경유 임시 디렉토리 (fetch → copy 중계)
+install_kubernetes_offline_local_dir: /tmp/k8s-offline
+# worker 임시 디렉토리
+install_kubernetes_offline_worker_deb_dir: /tmp/k8s-worker-debs
+install_kubernetes_offline_worker_img_tar: /tmp/k8s-worker-images.tar
