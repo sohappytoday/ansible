@@ -8,9 +8,8 @@
   - [모든 서버 사양 조사](#모든-서버-사양-조사)
   - [Database로 우회하여 GPU 및 프로세스 상태 변화 수집](#database로-우회하여-gpu-및-프로세스-상태-변화-수집)
   - [Docker 설치](#docker-설치)
-  - [Kubernetes 설치 (미완성)](HA-KUBERNETES-CLUSTER.md)
+  - [HA Kubernetes Cluster 구축](HA-KUBERNETES-CLUSTER.md)
 - [트러블 슈팅](#트러블-슈팅)
-- [추가 작업 진행해볼 것](#추가-작업-진행해볼-것)
 
 ---
 
@@ -38,7 +37,7 @@ CNCF 검색, ChatGPT 검색 등 여러가지를 알아보면서 RedHat이 개발
 - [모든 서버 사양 조사 (`추가 작업`)](#모든-서버-사양-조사)
 - [Database로 우회하여 GPU 및 프로세스 상태 변화 수집 (`추가 작업`)](#Database로-우회하여-GPU-및-프로세스-상태-변화-수집)
 - [Docker 설치 (`추가 공부`)](#Docker-설치)  
-- [Kubernetes 설치 (`추가 공부`, (미완성))](HA-KUBERNETES-CLUSTER.md)  
+- [HA Kubernetes Cluster 구축 (`추가 공부`)](HA-KUBERNETES-CLUSTER.md)  
 
 ## Node Exporter 설치
 

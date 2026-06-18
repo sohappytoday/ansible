@@ -2,7 +2,7 @@
 
 [← README로 돌아가기](README.md)
 
-Ansible + Terraform으로 kubeadm 기반 Kubernetes 클러스터를 자동 구축·운영하는 작업이다. *(진행 중)*
+Ansible + Terraform으로 kubeadm 기반 Kubernetes 클러스터를 자동 구축·운영하는 작업이다.
 
 ---
 
