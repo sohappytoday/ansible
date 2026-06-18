@@ -30,6 +30,17 @@
   register: tigera_operator
   changed_when: "'unchanged' not in tigera_operator.stdout"
 
+# Tigera operator가 CRD를 등록할 때까지 대기 (operator 설치 후 전파 지연)
+- name: Wait for Tigera operator CRDs to be established
+  command: >
+    kubectl wait --for=condition=established --timeout=120s
+    crd/installations.operator.tigera.io
+    crd/apiservers.operator.tigera.io
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  retries: 5
+  delay: 10
+
 # custom-resources 렌더링 (pod CIDR 주입) 후 적용
 - name: Render Calico custom-resources
   template:
