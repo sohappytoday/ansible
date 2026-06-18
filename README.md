@@ -8,7 +8,7 @@
   - [모든 서버 사양 조사](#모든-서버-사양-조사)
   - [Database로 우회하여 GPU 및 프로세스 상태 변화 수집](#database로-우회하여-gpu-및-프로세스-상태-변화-수집)
   - [Docker 설치](#docker-설치)
-  - [HA Kubernetes Cluster 구축](HA-KUBERNETES-CLUSTER.md)
+  - [HA Kubernetes Cluster 구축](ha-kubernetes-cluster-v2.md)
 - [트러블 슈팅](#트러블-슈팅)
 
 ---
@@ -37,7 +37,7 @@ CNCF 검색, ChatGPT 검색 등 여러가지를 알아보면서 RedHat이 개발
 - [모든 서버 사양 조사 (`추가 작업`)](#모든-서버-사양-조사)
 - [Database로 우회하여 GPU 및 프로세스 상태 변화 수집 (`추가 작업`)](#Database로-우회하여-GPU-및-프로세스-상태-변화-수집)
 - [Docker 설치 (`추가 공부`)](#Docker-설치)  
-- [HA Kubernetes Cluster 구축 (`추가 공부`)](HA-KUBERNETES-CLUSTER.md)  
+- [HA Kubernetes Cluster 구축 (`추가 공부`)](ha-kubernetes-cluster-v2.md)  
 
 ## Node Exporter 설치
 
@@ -695,6 +695,6 @@ chmod 600 ~/.ssh/authorized_keys
 결론적으로 sudoers에 등록된 계정이라면 `sudo -i` 를 쓰면 되고,  
 그렇지 않다면 `su -` 후 **root 비밀번호**를 입력해야 한다는 것을 알게 되었다.
 
-> 쿠버네티스 클러스터 구축 중 겪은 트러블슈팅은 [HA-KUBERNETES-CLUSTER.md](HA-KUBERNETES-CLUSTER.md#트러블-슈팅)에 정리했다.
+> 쿠버네티스 클러스터 구축 중 겪은 트러블슈팅은 [ha-kubernetes-cluster-v2.md](ha-kubernetes-cluster-v2.md#트러블-슈팅)에 정리했다.
 
 ---
