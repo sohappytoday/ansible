@@ -56,6 +56,35 @@
     remote_src: true
     mode: '0600'
 
+# === kubeconfig (접속 유저) ===
+# kubeadm init이 안내하는 "regular user" 설정과 동일:
+#   mkdir -p $HOME/.kube && cp admin.conf $HOME/.kube/config && chown
+# 서버에 직접 SSH로 접속한 ansible_user(예: ubuntu)가 sudo 없이 kubectl을 쓰도록 한다.
+- name: Look up login user home directory
+  getent:
+    database: passwd
+    key: "{{ ansible_user }}"
+  when: ansible_user != "root"
+
+- name: Create .kube directory for the login user
+  file:
+    path: "{{ getent_passwd[ansible_user][4] }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0700'
+  when: ansible_user != "root"
+
+- name: Set up kubeconfig for the login user
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ getent_passwd[ansible_user][4] }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+  when: ansible_user != "root"
+
 # === join 정보 생성 ===
 # init 여부와 무관하게 항상 생성한다 (다른 노드가 참조할 수 있도록).
 # 생성된 fact는 첫 CP의 hostvars에 남아 join 단계에서 사용된다.
