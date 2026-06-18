@@ -1,0 +1,32 @@
+all:
+  children:
+    control_plane:
+      hosts:
+        master-1:
+          ansible_host: 43.203.143.239
+          ansible_port: 22
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/terraform-key
+          ansible_become: true
+          ansible_become_method: sudo
+          ansible_become_user: root
+    worker_nodes:
+      hosts:
+        worker-1:
+          ansible_host: 10.0.2.234
+          ansible_port: 22
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/terraform-key
+          ansible_become: true
+          ansible_become_method: sudo
+          ansible_become_user: root
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/terraform-key -W %h:%p -q -o StrictHostKeyChecking=no ubuntu@43.203.143.239"'
+        worker-2:
+          ansible_host: 10.0.2.58
+          ansible_port: 22
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/terraform-key
+          ansible_become: true
+          ansible_become_method: sudo
+          ansible_become_user: root
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/terraform-key -W %h:%p -q -o StrictHostKeyChecking=no ubuntu@43.203.143.239"'

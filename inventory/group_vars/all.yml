@@ -1,0 +1,19 @@
+---
+# install_kubernetes role 구성 변수
+# 선택: K8s 1.34 / containerd / Calico / CP 1 + Worker 2 (단순 구성)
+
+# 노드 수 — 단순 구성 (cp_count=1 이면 HA/LB 미사용)
+install_kubernetes_cp_count: 1
+install_kubernetes_worker_count: 2
+
+# K8s 버전 (마이너 스트림)
+install_kubernetes_version: "1.34"
+
+# Container Runtime
+install_kubernetes_cri_type: "containerd"
+
+# CNI
+install_kubernetes_cni_type: "calico"
+
+# worker는 폐쇄망(인터넷 아웃바운드 차단) — CP 경유 오프라인 설치
+install_kubernetes_offline_worker: true
