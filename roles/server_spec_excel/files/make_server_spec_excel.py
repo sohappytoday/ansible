@@ -36,7 +36,7 @@ def load_rows():
             "Gateway": data.get("gateway", "N/A"),
             "OS": data.get("os", "N/A"),
             "CPU Model": data.get("cpu_model_name", "N/A"),
-            "CPU Core Count": data.get("cpu_core_count", "N/A"),
+            "Physical CPU Cores": data.get("cpu_physical_core_count", "N/A"),
             "CPU Thread/Core": data.get("cpu_thread_per_core", "N/A"),
             "RAM": data.get("ram", "N/A"),
             "Disk": disk_text,

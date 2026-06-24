@@ -34,9 +34,13 @@
   register: cpu_model_name
   changed_when: false
 
-- name: Get CPU Core count
-  shell: nproc
-  register: cpu_core_num
+- name: Get CPU physical core count
+  shell: |
+    lscpu | awk -F: '
+      /^Core\(s\) per socket/ {gsub(/ /, "", $2); c=$2}
+      /^Socket\(s\)/          {gsub(/ /, "", $2); s=$2}
+      END {print c*s}'
+  register: cpu_physical_core_num
   changed_when: false
 
 - name: Get CPU thread per core
@@ -52,8 +56,16 @@
   changed_when: false
 
 # Disk
-- name: Get Disk
-  shell: lsblk -d -o NAME,TYPE,SIZE,ROTA,MODEL | awk '$2=="disk"'
+# ROTA(rotational)로 HDD(1)/SSD(0) 분류 후 타입별 개수·총용량 집계.
+# 같은 모델의 물리 디스크가 여러 개면 NAME(sda/sdb…)이 다르므로 그대로 합산된다.
+- name: Get Disk grouped by type (HDD/SSD)
+  shell: |
+    lsblk -b -d -n -o TYPE,ROTA,SIZE \
+      | awk '$1=="disk" {if ($2==1) {hn++; hb+=$3} else {sn++; sb+=$3}}
+             END {if (sn) print "SSD", sn, sb; if (hn) print "HDD", hn, hb}' \
+      | while read -r t n b; do
+          printf '%s: %d개, %s\n' "$t" "$n" "$(numfmt --to=iec "$b")"
+        done
   register: disk_info
   changed_when: false
 
@@ -68,7 +80,7 @@
       gateway: "{{ gateway.stdout | default('N/A', true) }}"
       os: "{{ os_pretty.stdout | default('N/A', true) }}"
       cpu_model_name: "{{ cpu_model_name.stdout | default('N/A', true) }}"
-      cpu_core_count: "{{ cpu_core_num.stdout | default('N/A', true) }}"
+      cpu_physical_core_count: "{{ cpu_physical_core_num.stdout | default('N/A', true) }}"
       cpu_thread_per_core: "{{ cpu_thread_per_core.stdout | default('N/A', true) }}"
       ram: "{{ ram_info.stdout | default('N/A', true) }}"
       disk: "{{ disk_info.stdout_lines | default([]) }}"
