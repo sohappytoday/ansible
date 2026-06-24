@@ -150,3 +150,13 @@ AWS 상태 검사는 정상(`ok`)이었지만 OS userspace가 멈춰 있어, 결
 `CLAUDE.md`에 **"승인 필수" 작업**(terraform apply, kubectl drain/delete, kubeadm reset, etcdctl 직접 조작, 인증서 갱신, 버전 업그레이드)을 표로 명문화했다.  
 그리고 이 중 파괴적인 명령들은 위 `k8s-safety.sh` 훅이 기계적으로 차단한다.  
 즉 **rule은 문서(CLAUDE.md)로 선언하고, hook으로 강제 집행**하는 이중 구조다. 사람이 규칙을 잊더라도 훅이 마지막 방어선이 된다.
+
+## Docs — 컨텍스트 분할
+
+Claude Code는 세션을 시작할 때 `CLAUDE.md`를 **항상 로드**한다. 모든 상세 내용을 여기에 담으면 매 세션 컨텍스트(토큰)를 그만큼 소비한다.  
+그래서 상세 문서를 `.claude/docs/`로 **분할**해 두고(아키텍처·컨벤션·S3 계획 등), `CLAUDE.md`에는 요약과 포인터만 남겼다. 각 문서는 **필요한 스킬이 실행될 때만 읽어 들인다.**
+
+- `/k8s-setup` → 시작 시 `.claude/docs/architecture.md`를 로드
+- `/new-role` → `.claude/docs/conventions.md`를 참조
+
+→ 평상시 컨텍스트는 가볍게 유지하면서, 작업할 때만 관련 문서를 끌어오는 구조다. 토큰 소비를 줄이는 동시에 문서·코드·스킬이 한 곳을 바라보게 해 일관성도 확보한다.
