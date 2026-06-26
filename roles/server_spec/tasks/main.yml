@@ -30,13 +30,13 @@
 # CPU  
 - name: Get CPU Model Name
   shell: |
-    lscpu | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2}'
+    LC_ALL=C lscpu | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2}'
   register: cpu_model_name
   changed_when: false
 
 - name: Get CPU physical core count
   shell: |
-    lscpu | awk -F: '
+    LC_ALL=C lscpu | awk -F: '
       /^Core\(s\) per socket/ {gsub(/ /, "", $2); c=$2}
       /^Socket\(s\)/          {gsub(/ /, "", $2); s=$2}
       END {print c*s}'
@@ -45,13 +45,13 @@
 
 - name: Get CPU thread per core
   shell: |
-    lscpu | awk -F: '/Thread\(s\) per core/ {gsub(/^[ \t]+/, "", $2); print $2}'
+    LC_ALL=C lscpu | awk -F: '/Thread\(s\) per core/ {gsub(/^[ \t]+/, "", $2); print $2}'
   register: cpu_thread_per_core
   changed_when: false
 
 # RAM
 - name: Get RAM
-  shell: free -h | awk '/^Mem:/ {print $2}'
+  shell: LC_ALL=C free -h | awk '/^Mem:/ {print $2}'
   register: ram_info
   changed_when: false
 

@@ -58,7 +58,7 @@ def create_excel(rows):
         "Gateway",
         "OS",
         "CPU Model",
-        "CPU Core Count",
+        "Physical CPU Cores",
         "CPU Thread/Core",
         "RAM",
         "Disk",
