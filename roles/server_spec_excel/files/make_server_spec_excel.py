@@ -5,7 +5,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path("/app")
 JSON_DIR = BASE_DIR / "json"
 TODAY = datetime.now().strftime("%Y%m%d")
 EXCEL_FILE = BASE_DIR / "server_spec" / f"server-spec-{TODAY}.xlsx"
