@@ -1,9 +1,11 @@
 ---
-# install_kubernetes role 구성 변수
-# 선택: K8s 1.34 / containerd / Calico / CP 1 + Worker 2 (단순 구성)
+# install_kubernetes role 구성 변수 (v3 인프라 기준)
+# 구성: K8s 1.34 / containerd / Calico / CP 3(HA) + Worker 2
+# 동적 값(control_plane_endpoint, 노드 instance ID 등)은 generate-cluster-hosts.sh가
+# inventory/cluster-hosts.yml에 주입한다. 여기엔 정적 구성만 둔다.
 
-# 노드 수 — 단순 구성 (cp_count=1 이면 HA/LB 미사용)
-install_kubernetes_cp_count: 1
+# 노드 수 — CP 3대 HA. terraform control_plane_nodes 개수와 반드시 일치시킬 것.
+install_kubernetes_cp_count: 3
 install_kubernetes_worker_count: 2
 
 # K8s 버전 (마이너 스트림)
@@ -15,5 +17,8 @@ install_kubernetes_cri_type: "containerd"
 # CNI
 install_kubernetes_cni_type: "calico"
 
-# worker는 폐쇄망(인터넷 아웃바운드 차단) — CP 경유 오프라인 설치
-install_kubernetes_offline_worker: true
+# HA 엔드포인트는 내부 NLB(control_plane_endpoint)를 사용한다.
+# → keepalived/HAProxy(lb.yml)·loadbalancers 그룹은 쓰지 않는다.
+
+# worker는 NAT를 통해 인터넷 outbound가 가능하므로 온라인 설치한다(폐쇄망 아님).
+install_kubernetes_offline_worker: false

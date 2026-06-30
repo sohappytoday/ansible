@@ -1,0 +1,29 @@
+---
+# Ingress Controller (ingress-nginx, NodePort)
+# main.yml에서 첫 번째 CP에서만 실행되도록 조건 처리됨.
+# 외부 Reverse Proxy(Public)가 worker의 NodePort(http)로 포워딩하므로, controller
+# Service의 http nodePort를 install_kubernetes_ingress_nodeport(terraform ingress_nodeport와
+# 동일, 기본 30080)로 고정한다. CP는 NAT를 통해 매니페스트를 받는다.
+
+- name: Apply ingress-nginx manifest (baremetal/NodePort)
+  command: >
+    kubectl apply -f
+    https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-{{ install_kubernetes_ingress_nginx_version }}/deploy/static/provider/baremetal/deploy.yaml
+  register: ingress_apply
+  changed_when: "'created' in ingress_apply.stdout or 'configured' in ingress_apply.stdout"
+
+- name: Wait for ingress-nginx controller service to exist
+  command: kubectl -n ingress-nginx get svc ingress-nginx-controller
+  register: ingress_svc
+  retries: 12
+  delay: 5
+  until: ingress_svc.rc == 0
+  changed_when: false
+
+# ServicePort의 strategic-merge key는 'port'라서 port=80 항목에만 nodePort가 적용된다.
+- name: Pin ingress-nginx http NodePort
+  command: >
+    kubectl -n ingress-nginx patch svc ingress-nginx-controller
+    -p '{"spec":{"ports":[{"port":80,"nodePort":{{ install_kubernetes_ingress_nodeport }}}]}}'
+  register: ingress_patch
+  changed_when: "'patched' in ingress_patch.stdout and 'no change' not in ingress_patch.stdout"

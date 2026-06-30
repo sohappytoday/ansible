@@ -29,8 +29,19 @@
   register: kubeadm_version
   changed_when: false
 
+# HA apiserver 엔드포인트 결정: control_plane_endpoint(외부 LB, 예 내부 NLB) 우선, 없으면 VIP.
+- name: Determine control plane endpoint
+  set_fact:
+    cp_endpoint: >-
+      {{ install_kubernetes_control_plane_endpoint
+         if install_kubernetes_control_plane_endpoint | length > 0
+         else (install_kubernetes_vip if install_kubernetes_cp_count | int >= 3 else '') }}
+
 # === kubeadm init ===
-# HA(cp_count >= 3): --control-plane-endpoint(VIP) + --upload-certs 추가
+# HA: --control-plane-endpoint(NLB DNS 또는 VIP) + --upload-certs 추가.
+# --apiserver-cert-extra-sans 127.0.0.1: 로컬 kubectl이 SSM 포트포워딩(127.0.0.1:6443)으로
+#   apiserver에 붙을 때 TLS 인증서가 유효하도록 SAN에 루프백을 포함시킨다.
+#   (NLB DNS는 --control-plane-endpoint로 지정되어 자동으로 SAN에 들어간다.)
 - name: Run kubeadm init
   command: >
     kubeadm init
@@ -38,7 +49,8 @@
     --cri-socket {{ cri_socket }}
     --pod-network-cidr {{ pod_cidr }}
     --service-cidr {{ install_kubernetes_service_cidr }}
-    {% if install_kubernetes_cp_count | int >= 3 %}--control-plane-endpoint {{ install_kubernetes_vip }}:6443 --upload-certs{% endif %}
+    --apiserver-cert-extra-sans 127.0.0.1
+    {% if cp_endpoint | length > 0 %}--control-plane-endpoint {{ cp_endpoint }}:{{ install_kubernetes_apiserver_port }} --upload-certs{% endif %}
   when: not kubeadm_admin_conf.stat.exists
   register: kubeadm_init
 

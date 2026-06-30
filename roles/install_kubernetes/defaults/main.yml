@@ -35,11 +35,26 @@ install_kubernetes_calico_version: ""   # 예 "v3.29.0" (비우면 GitHub 최신
 install_kubernetes_flannel_version: ""  # 예 "v0.26.0" (비우면 latest)
 install_kubernetes_cilium_version: ""   # 예 "1.16.5" (비우면 최신 차트)
 
-# HA 구성 시에만 필요
-install_kubernetes_vip: ""           # cp_count >= 3 일 때 설정
-install_kubernetes_apiserver_port: 6443         # HAProxy frontend / apiserver 포트
+# HA apiserver 단일 엔드포인트
+# 우선순위: control_plane_endpoint(외부 LB) > vip(keepalived). 둘 중 하나만 쓴다.
+#   - AWS 등 클라우드: 내부 NLB의 DNS 이름을 control_plane_endpoint로 지정(권장).
+#     keepalived/HAProxy(lb.yml)는 사용하지 않는다.
+#   - 온프렘: vip + loadbalancers 그룹으로 keepalived/HAProxy 사용.
+# inventory/cluster-hosts.yml(generate-cluster-hosts.sh가 생성)에서 자동 주입됨.
+install_kubernetes_control_plane_endpoint: ""
+install_kubernetes_vip: ""           # cp_count >= 3 + 온프렘 keepalived 사용 시 설정
+install_kubernetes_apiserver_port: 6443         # apiserver / 엔드포인트 포트
 install_kubernetes_keepalived_vrid: 51          # VRRP virtual_router_id (서브넷 내 고유)
 install_kubernetes_keepalived_auth_pass: "k8svip42"  # VRRP 인증 암호
+
+# Ingress Controller (ingress-nginx) — 외부 Reverse Proxy가 NodePort로 포워딩
+# Reverse Proxy(Public)가 worker의 이 NodePort(http)로 트래픽을 보낸다. Terraform의
+# ingress_nodeport(기본 30080)와 반드시 일치해야 한다.
+install_kubernetes_install_ingress: true
+install_kubernetes_ingress_nodeport: 30080
+# ingress-nginx 버전 — K8s 버전과 호환되는 릴리스를 지정할 것.
+# (호환표: https://github.com/kubernetes/ingress-nginx#supported-versions-table)
+install_kubernetes_ingress_nginx_version: "v1.12.1"
 
 # 오프라인(폐쇄망) worker 설치
 # worker가 인터넷 아웃바운드 차단 환경일 때 true. CP에서 .deb/이미지를 받아 worker로 복사 설치.
