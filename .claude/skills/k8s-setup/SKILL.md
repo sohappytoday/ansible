@@ -11,21 +11,23 @@ argument-hint: "[단계명] config|terraform|inventory|k8s|all (기본값: all)"
 ## 0단계: 구성 선택
 
 플레이북 실행 전 아래 항목들을 사용자에게 선택받는다.
-선택 결과를 `inventory/cluster-hosts.yml`의 `vars` 섹션과 `~/terraform/templates/` tfvars에 반영한다.
+선택 결과(정적 구성)는 `inventory/group_vars/all.yml`과 `~/terraform/templates/` tfvars에 반영한다.
+`cluster-hosts.yml`의 vars는 generate 스크립트가 매번 덮어쓰므로 동적 값만 둔다.
 
 ### 노드 수
 
 ```
 Control Plane 수:
-  1         → 단순 구성 (HAProxy/Keepalived 없음)
-  3 이상 홀수 → HA 구성 (HAProxy + Keepalived 필요, k8s_vip 설정 필요)
+  1         → 단순 구성
+  3 이상 홀수 → HA 구성 (AWS v3는 내부 NLB가 단일 엔드포인트. keepalived/HAProxy 미사용)
 
 Worker Node 수:
   제한 없음 (1 이상)
 
 → cp_count: <선택>
 → worker_count: <선택>
-→ k8s_vip: "<VIP IP>"  # cp_count >= 3 일 때만 설정
+# AWS v3: HA 엔드포인트는 NLB(control_plane_endpoint). generate 스크립트가 자동 주입.
+# install_kubernetes_vip 는 온프렘 keepalived 구성에서만 설정.
 ```
 
 > CP 수를 홀수로 유지해야 etcd 쿼럼이 보장된다. (2, 4개는 불가)
@@ -125,6 +127,33 @@ worker 노드가 인터넷 아웃바운드 차단(private subnet) 환경이면 �
 
 ## 파이프라인
 
+> **파이프라인 진입 전 반드시 아래 순서를 지킨다.** "클러스터 구축해줘" 요청을 받았다고
+> 곧바로 `terraform plan`/`apply`나 인벤토리 재생성으로 들어가지 말 것. 각 단계는 다음 단계로
+> 넘어가기 전 사용자 확인을 받는 게이트다.
+>
+> **① Terraform apply 여부를 먼저 묻는다.** VM(노드)이 이미 떠 있는 상태인지 사용자에게 확인한다.
+>
+> **② (이미 apply됨) `terraform output`으로 실제 인프라를 확인하고 `group_vars/all.yml`과 대조한다.**
+>    `cd ~/terraform/templates && terraform output`(읽기 전용, 자동 실행 가능)으로 노드 수·
+>    instance ID·NLB 엔드포인트를 본다. output의 CP/worker 수가 all.yml의 cp_count/worker_count와
+>    일치하는지 확인한다. 어긋나면(예: CP 수 불일치, output 비어 있음 = 실제론 미apply) 사용자에게
+>    알리고 어느 쪽에 맞출지 정한다.
+>    - **(아직 apply 안 함)** → 1단계 Terraform부터 진행. apply는 VM 생성·비용이 드는 비가역
+>      작업이므로 승인 필수.
+>
+> **③ 설치 조건을 보여주고 변경 여부를 명시적으로 묻는다.** Container Runtime(`cri_type`),
+>    CNI(`cni_type`), K8s 버전(`version`), 노드 수(`cp_count`/`worker_count`)를 표로 제시하고
+>    **"이대로 진행할지, 변경할지"를 반드시 물은 뒤 답을 받는다.** 변경하겠다면 `group_vars/all.yml`을
+>    갱신한다. 이 확인을 건너뛰고 인벤토리 재생성·설치로 넘어가지 말 것.
+>
+> **④ 상황에 맞게 `generate-cluster-hosts.sh`로 `cluster-hosts.yml`을 재생성한다(2단계).**
+>    SSH 키 경로(`SSH_KEY`)·리전(`AWS_REGION`) 등 환경이 기본값과 다르면 스크립트 변수를 상황에
+>    맞게 조정한 뒤 실행한다. 인스턴스 stop/start로 private IP·instance ID가 바뀌므로 기존 파일을
+>    신뢰하지 말고 항상 재생성한다.
+>
+> `terraform output`은 읽기 전용이라 자동 실행해도 안전하다. 핵심은 ③의 설치 조건 확인을
+> 게이트로 강제해, 사용자 승인 없이 인벤토리 재생성·설치로 직행하지 않는 것이다.
+
 ### 1단계: Terraform (VM 프로비저닝)
 
 ```bash
@@ -149,11 +178,12 @@ cd ~/terraform/templates && terraform output
 ```
 
 생성된 `inventory/cluster-hosts.yml` 확인:
-- control_planes 그룹 노드 수 (단순 1 / HA 3+)
-- workers 그룹 노드 수
-- HA 구성 시 loadbalancers 그룹 2개 (keepalived_priority 100/90)
-- master public IP / worker private IP가 terraform output과 일치하는지
-- vars 섹션에 선택한 k8s_version, cri_type, cni_type 반영 여부
+- `control_plane` 그룹 노드 수 (단순 1 / HA 3+)
+- `worker_nodes` 그룹 노드 수
+- 각 노드 `ansible_host`가 terraform output의 instance ID와 일치하는지 (AWS v3: IP 아님)
+- `all.vars.install_kubernetes_control_plane_endpoint`가 NLB DNS와 일치하는지
+- 설치 조건(k8s_version, cri_type, cni_type)은 cluster-hosts.yml이 아니라 `group_vars/all.yml`에 있다
+  (generate 스크립트가 cluster-hosts.yml을 덮어쓰므로 정적 구성은 그곳에 두지 않는다)
 
 ### 3단계: 연결 확인
 
@@ -189,7 +219,9 @@ tasks/
 ├── cni-calico.yml         ← cni_type=calico 일 때
 ├── cni-flannel.yml        ← cni_type=flannel 일 때
 ├── cni-cilium.yml         ← cni_type=cilium 일 때
-└── lb.yml                 ← cp_count >= 3 일 때만 실행 (HAProxy + Keepalived)
+├── ingress-nginx.yml      ← 첫 CP에서 ingress-nginx 설치 (NodePort 30080 고정)
+└── lb.yml                 ← 온프렘 keepalived/HAProxy. AWS v3는 loadbalancers 그룹이
+                              없어 자동 스킵 (HA 엔드포인트는 NLB가 담당)
 ```
 
 ---
@@ -200,5 +232,5 @@ tasks/
 
 - 모든 노드 `Ready`
 - `kube-system` 네임스페이스 Pod 모두 `Running`
-- etcd 멤버 3개 정상
-- HAProxy VIP로 API server 접근 가능
+- etcd 멤버 3개 정상 (HA cp_count=3)
+- 내부 NLB 엔드포인트(SSM 포트포워딩 경유 127.0.0.1:6443)로 API server 접근 가능

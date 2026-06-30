@@ -1,150 +1,56 @@
 ---
 name: git-commit
-description: AngularJS 컨벤션으로 변경 사항을 분석하고 git add, commit, push를 수행한다. 사용자가 명시적으로 /git-commit 으로 호출할 때만 실행된다.
+description: 변경 사항 커밋을 git-committer 서브에이전트(haiku)에 위임한다. 사용자가 명시적으로 /git-commit 으로 호출할 때만 실행된다.
 argument-hint: "[커밋 메시지 힌트 — 생략 가능]"
 ---
 
 # Git Commit
 
-AngularJS commit convention에 따라 변경 사항을 분석하고, 커밋 메시지를 제안한 뒤 사용자 승인 후
-`git add .` → `git commit` → `git push`를 수행한다.
-
-## AngularJS Commit Convention
-
-```
-<type>(<scope>): <subject>
-<빈 줄>
-<body — 선택>
-<빈 줄>
-<footer — 선택>
-```
-
-### Type
-
-| Type | 사용 상황 |
-|------|----------|
-| feat | 새로운 기능 추가 |
-| fix | 버그 수정 |
-| docs | 문서 수정 |
-| style | 코드 포맷 변경 (기능 변경 없음) |
-| refactor | 리팩토링 (기능 변경·버그 수정 없음) |
-| perf | 성능 개선 |
-| test | 테스트 추가·수정 |
-| chore | 빌드 설정, 패키지 관리 등 |
-
-### Subject 규칙
-
-- 명령형으로 작성 (`add` not `added`)
-- 첫 글자 소문자
-- 끝에 마침표 없음
-- 72자 이내
-- 한국어 기본, 기술 용어·모듈명·리소스명은 영어 허용
-  - 예: `add ec2 instance type variable`
-  - 예: `S3 remote backend 설정 추가`
-  - 예: `refactor(network): VPC subnet 분리`
-
----
+이 스킬은 **제안은 `git-committer` 서브에이전트(haiku)** 에 맡기고, **실행(add/commit/push/
+동기화)은 메인 에이전트가 직접** 한다. 서브에이전트는 비대화형이고, 코디네이터가 전달한
+승인을 실제 사용자 승인으로 인정하지 않는 가드레일이 있어 커밋 실행을 거부한다. 그래서
+실행 위임은 불가능하며, 메인이 사용자 승인을 받아 직접 실행한다.
 
 ## 실행 절차
 
-### Step 1: 변경 사항 파악
+### Step 1: 제안 받기 (서브에이전트 호출 — commit 금지)
 
-아래 명령으로 변경 내용을 확인한다.
+Agent 도구로 `git-committer`(subagent_type)를 호출한다. 프롬프트에:
 
-```bash
-git status
-git diff
-git diff --staged
-```
+- 변경 사항을 분석해 **커밋 메시지만 제안하고, 절대 커밋/푸시하지 말라**고 지시한다.
+- `$ARGUMENTS`가 있으면 커밋 메시지 힌트로 함께 전달한다.
 
-파일 목록과 변경 내용을 분석해 적절한 type, scope, subject를 결정한다.
+서브에이전트가 돌려준 제안 메시지를 받는다.
 
-### Step 2: 커밋 메시지 초안 작성
+### Step 2: 사용자 확인
 
-- `$ARGUMENTS`가 있으면 커밋 메시지 힌트로 활용한다.
-- 변경 파일이 여러 type에 걸쳐 있으면 가장 핵심적인 type 하나를 선택한다.
-- scope는 변경 범위를 나타내는 짧은 명사 (예: `ec2`, `variables`, `network`, `iam`, `backend`)
-
-#### 메시지 분량 — 제목 확실, body는 핵심만
-
-- **제목(subject)은 항상 명확하게.** 무엇을 왜 했는지 한눈에 드러나게 쓴다.
-- **body는 변경이 크거나 중요한 로직·이유를 남겨야 할 때만** 적는다.
-  작은 변경(문서 한 줄, 인덱스 정리 등)은 **제목 한 줄로 끝낸다.**
-- 파일별로 일일이 나열하는 장황한 body는 지양한다. 핵심 로직·의도만 간추린다.
-
-#### 커밋 분리 — 논리 단위로 나누되 비슷한 파일은 묶기
-
-- **논리적 변경 단위로 커밋을 나눈다.** 성격이 다르면(feat / fix / docs 등) 분리한다.
-- 단, **성격이 비슷한 파일은 하나로 묶는다.**
-  - 예: `cni-calico.yml` + `cni-cilium.yml` → "CNI task 구성" 한 커밋
-  - 예: 오프라인 설치 task 여러 개 → 한 커밋
-  - 예: 같은 주제를 다루는 문서 여러 개 → 한 커밋
-- 변경이 한 가지 논리면 그냥 한 커밋으로 한다 (억지로 쪼개지 않는다).
-- 동적·자동 생성 파일(예: terraform output 기반 인벤토리)은 메시지에 그 사실을 명시한다.
-
-### Step 3: 사용자 확인
-
-커밋 메시지 초안을 보여주고 승인을 받는다.
+제안 메시지를 사용자에게 보여주고 승인을 받는다.
 
 ```
 다음 메시지로 커밋하겠습니다:
 
-  feat(variables): add ec2 instance type variable
+  <제안 메시지>
 
 진행할까요? [y] 승인 / [n] 취소 / 수정할 내용 직접 입력
 ```
 
-사용자가 수정 내용을 입력하면 그 내용으로 메시지를 바꾸고 다시 확인한다.
+- `n` 이면 중단한다.
+- 사용자가 수정 내용을 입력하면 그 메시지로 확정한다(필요하면 다시 확인).
 
-### Step 4: 실행
+### Step 3: 실행 (메인이 직접)
 
-승인 후 실행한다. **단일 논리 변경이면** 한 커밋으로:
+승인된 최종 메시지로 **메인 에이전트가 직접** Bash로 실행한다(서브에이전트에 위임하지 않는다).
 
-```bash
-git add .
-git commit -m "$(cat <<'EOF'
-<커밋 메시지>
-EOF
-)"
-git push
-```
+- `git add <대상 파일>` → `git commit` → `git push`
+- 현재 브랜치가 버전 브랜치(v1/v2/v3 등)면 main 으로 `--ff-only` 동기화까지 한다.
 
-**여러 논리로 나눌 땐** 그룹별로 `git add <파일들>` → `commit`을 반복한 뒤 마지막에 한 번 push한다:
+### Step 4: 결과 보고
 
-```bash
-git add <그룹1 파일들> && git commit -m "<메시지1>"
-git add <그룹2 파일들> && git commit -m "<메시지2>"
-git push
-```
-
-### Step 5: main 브랜치 동기화
-
-현재 브랜치가 `v1`, `v2`, `v3` 등 버전 브랜치이면 push 후 main도 동일 커밋으로 업데이트한다.
-
-```bash
-CURRENT=$(git branch --show-current)
-git checkout main
-git merge --ff-only "$CURRENT"
-git push origin main
-git checkout "$CURRENT"
-```
-
-- `--ff-only` — fast-forward가 불가능하면 중단한다. 강제 merge하지 않는다.
-- 버전 브랜치가 아닌 경우(예: `feature/xxx`)에는 이 단계를 건너뛴다.
-
-### Step 6: 결과 확인
-
-```bash
-git log --oneline -3
-```
-
-push 결과와 최근 커밋 3개를 출력한다.
-
----
+push 결과와 최근 커밋 3개(`git log --oneline -3`)를 사용자에게 보고한다.
 
 ## 규칙
 
-- `Co-authored-by` 트레일러를 **절대** 추가하지 않는다.
-- 사용자 승인 없이 커밋·푸시를 실행하지 않는다.
-- `--no-verify` 플래그를 사용하지 않는다.
+- 사용자 승인 없이 커밋·푸시하지 않는다.
+- 커밋 컨벤션(AngularJS)과 금지 사항(`Co-authored-by`/`Claude` 트레일러 금지, `--no-verify`·
+  `--force` 금지)은 `git-committer` 서브에이전트 정의를 기준으로 따른다.
 - 자동 트리거되지 않는다 — 반드시 `/git-commit` 으로 명시 호출해야 실행된다.
