@@ -1,0 +1,9 @@
+CLAUDE.md
+ansible.cfg
+inventory/hosts.yml
+inventory/hosts-sogang.yml
+# 실제값(인스턴스 ID·NLB DNS 등)이 담기는 생성 인벤토리 — .example 템플릿만 커밋
+inventory/ha-cluster-ssm.yml
+inventory/ha-cluster-ssh.yml
+make_xlsx.py
+output/
