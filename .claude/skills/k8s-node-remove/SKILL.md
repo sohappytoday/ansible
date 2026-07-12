@@ -44,7 +44,7 @@ DaemonSet Pod만 남아있어야 정상.
 
 ```bash
 ansible-playbook playbooks/k8s-node-remove.yml \
-  -i inventory/cluster-hosts.yml \
+  -i inventory/ha-cluster-ssm.yml \
   -e target_node=<node-name>
 ```
 

@@ -31,7 +31,7 @@ kubectl get pods -A | grep -v Running | grep -v Completed
 
 ```bash
 # CP 노드에서 실행
-ansible control_planes[0] -i inventory/cluster-hosts.yml -a \
+ansible control_planes[0] -i inventory/ha-cluster-ssm.yml -a \
   "etcdctl endpoint health --cluster \
    --endpoints=https://127.0.0.1:2379 \
    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
@@ -39,7 +39,7 @@ ansible control_planes[0] -i inventory/cluster-hosts.yml -a \
    --key=/etc/kubernetes/pki/etcd/server.key"
 
 # etcd 멤버 목록
-ansible control_planes[0] -i inventory/cluster-hosts.yml -a \
+ansible control_planes[0] -i inventory/ha-cluster-ssm.yml -a \
   "etcdctl member list --endpoints=https://127.0.0.1:2379 \
    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
    --cert=/etc/kubernetes/pki/etcd/server.crt \
@@ -65,8 +65,8 @@ kubectl get nodes -o jsonpath='{.items[*].status.conditions}' | python3 -c \
 curl -k https://<k8s_vip>:6443/healthz
 
 # HAProxy 상태
-ansible loadbalancers -i inventory/cluster-hosts.yml -a "systemctl status haproxy"
-ansible loadbalancers -i inventory/cluster-hosts.yml -a "systemctl status keepalived"
+ansible loadbalancers -i inventory/ha-cluster-ssm.yml -a "systemctl status haproxy"
+ansible loadbalancers -i inventory/ha-cluster-ssm.yml -a "systemctl status keepalived"
 ```
 
 **기대값**: `/healthz` → `ok`, haproxy/keepalived `active (running)`

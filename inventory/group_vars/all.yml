@@ -2,7 +2,7 @@
 # install_kubernetes role 구성 변수 (v3 인프라 기준)
 # 구성: K8s 1.34 / containerd / Calico / CP 3(HA) + Worker 2
 # 동적 값(control_plane_endpoint, 노드 instance ID 등)은 generate-cluster-hosts.sh가
-# inventory/cluster-hosts.yml에 주입한다. 여기엔 정적 구성만 둔다.
+# inventory/ha-cluster-ssm.yml에 주입한다. 여기엔 정적 구성만 둔다.
 
 # 노드 수 — CP 3대 HA. terraform control_plane_nodes 개수와 반드시 일치시킬 것.
 install_kubernetes_cp_count: 3

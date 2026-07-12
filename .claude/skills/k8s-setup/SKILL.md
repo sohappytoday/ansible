@@ -12,7 +12,7 @@ argument-hint: "[단계명] config|terraform|inventory|k8s|all (기본값: all)"
 
 플레이북 실행 전 아래 항목들을 사용자에게 선택받는다.
 선택 결과(정적 구성)는 `inventory/group_vars/all.yml`과 `~/terraform/templates/` tfvars에 반영한다.
-`cluster-hosts.yml`의 vars는 generate 스크립트가 매번 덮어쓰므로 동적 값만 둔다.
+`ha-cluster-ssm.yml`의 vars는 generate 스크립트가 매번 덮어쓰므로 동적 값만 둔다.
 
 ### 노드 수
 
@@ -74,7 +74,7 @@ curl -s https://dl.k8s.io/release/stable.txt
 ### 선택 결과 반영 (group_vars/all.yml)
 
 > 구성 변수는 `inventory/group_vars/all.yml`에 `install_kubernetes_*` 접두사로 저장한다.
-> `cluster-hosts.yml`은 generate 스크립트가 매번 덮어쓰므로 vars를 거기 두면 날아간다.
+> `ha-cluster-ssm.yml`은 generate 스크립트가 매번 덮어쓰므로 vars를 거기 두면 날아간다.
 > **항상 먼저 `all.yml`이 있는지 + 구성이 채워져 있는지 확인하고, 없으면 0단계 선택값으로 새로 만든다.**
 
 ```bash
@@ -146,7 +146,7 @@ worker 노드가 인터넷 아웃바운드 차단(private subnet) 환경이면 �
 >    **"이대로 진행할지, 변경할지"를 반드시 물은 뒤 답을 받는다.** 변경하겠다면 `group_vars/all.yml`을
 >    갱신한다. 이 확인을 건너뛰고 인벤토리 재생성·설치로 넘어가지 말 것.
 >
-> **④ 상황에 맞게 `generate-cluster-hosts.sh`로 `cluster-hosts.yml`을 재생성한다(2단계).**
+> **④ 상황에 맞게 `generate-cluster-hosts.sh`로 `ha-cluster-ssm.yml`을 재생성한다(2단계).**
 >    SSH 키 경로(`SSH_KEY`)·리전(`AWS_REGION`) 등 환경이 기본값과 다르면 스크립트 변수를 상황에
 >    맞게 조정한 뒤 실행한다. 인스턴스 stop/start로 private IP·instance ID가 바뀌므로 기존 파일을
 >    신뢰하지 말고 항상 재생성한다.
@@ -167,29 +167,29 @@ cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --va
 ### 2단계: 인벤토리 생성 (항상 재생성)
 
 > **반드시 매 구축마다 재생성한다.** 인스턴스를 stop/start하면 public IP는 물론
-> private IP까지 바뀐다. 기존 `cluster-hosts.yml`이 있어도 신뢰하지 말고, terraform
+> private IP까지 바뀐다. 기존 `ha-cluster-ssm.yml`이 있어도 신뢰하지 말고, terraform
 > output 기준으로 항상 새로 생성한 뒤 사용한다.
 
 ```bash
-# terraform output(IP)과 현재 cluster-hosts.yml이 일치하는지 먼저 비교
+# terraform output(IP)과 현재 ha-cluster-ssm.yml이 일치하는지 먼저 비교
 cd ~/terraform/templates && terraform output
 # 일치 여부와 무관하게 항상 재생성 (드리프트 방지)
 ./inventory/generate-cluster-hosts.sh
 ```
 
-생성된 `inventory/cluster-hosts.yml` 확인:
+생성된 `inventory/ha-cluster-ssm.yml` 확인:
 - `control_plane` 그룹 노드 수 (단순 1 / HA 3+)
 - `worker_nodes` 그룹 노드 수
 - 각 노드 `ansible_host`가 terraform output의 instance ID와 일치하는지 (AWS v3: IP 아님)
 - `all.vars.install_kubernetes_control_plane_endpoint`가 NLB DNS와 일치하는지
-- 설치 조건(k8s_version, cri_type, cni_type)은 cluster-hosts.yml이 아니라 `group_vars/all.yml`에 있다
-  (generate 스크립트가 cluster-hosts.yml을 덮어쓰므로 정적 구성은 그곳에 두지 않는다)
+- 설치 조건(k8s_version, cri_type, cni_type)은 ha-cluster-ssm.yml이 아니라 `group_vars/all.yml`에 있다
+  (generate 스크립트가 ha-cluster-ssm.yml을 덮어쓰므로 정적 구성은 그곳에 두지 않는다)
 
 ### 3단계: 연결 확인
 
 ```bash
-ansible all -i inventory/cluster-hosts.yml -m ping
-ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml --check
+ansible all -i inventory/ha-cluster-ssm.yml -m ping
+ansible-playbook -i inventory/ha-cluster-ssm.yml install-kubernetes-playbook.yml --check
 ```
 
 > ping이 `UNREACHABLE`/`Connection timed out`이면 먼저 인벤토리 IP가 terraform
@@ -199,7 +199,7 @@ ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml 
 ### 4단계: 클러스터 구축
 
 ```bash
-ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml
+ansible-playbook -i inventory/ha-cluster-ssm.yml install-kubernetes-playbook.yml
 ```
 
 내부적으로 `install_kubernetes` role의 `tasks/main.yml`이 아래 순서로 파일을 호출한다.

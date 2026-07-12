@@ -44,10 +44,10 @@ Ansible + Terraform으로 kubeadm 기반 Kubernetes 클러스터를 자동 구�
 ./inventory/generate-cluster-hosts.sh
 
 # 2. 연결 확인
-ansible all -i inventory/cluster-hosts.yml -m ping
+ansible all -i inventory/ha-cluster-ssm.yml -m ping
 
 # 3. 클러스터 구축
-ansible-playbook -i inventory/cluster-hosts.yml install-kubernetes-playbook.yml
+ansible-playbook -i inventory/ha-cluster-ssm.yml install-kubernetes-playbook.yml
 ```
 
 ---

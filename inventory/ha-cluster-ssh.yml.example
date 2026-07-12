@@ -1,0 +1,54 @@
+---
+# HA 클러스터 인벤토리 — Terraform 미사용 / 직접 SSH 접속판
+# ---------------------------------------------------------------------------
+# 모든 노드에 로컬에서 SSH가 바로 닿는다고 가정한다(Private/SSM/bastion 불필요).
+# <...> 플레이스홀더를 실제 IP/키 경로로 교체 후 실행할 것.
+#
+# 접속 : ansible_host = 접속 가능한 IP, 표준 SSH(키 인증). ProxyCommand 없음.
+# HA   : 내부/외부 NLB가 없으므로 keepalived VIP 로 apiserver 를 단일화한다.
+#        → loadbalancers 그룹(전용 LB 노드 2대) + install_kubernetes_vip 필요.
+#        → role 의 lb.yml 이 HAProxy+Keepalived 를 구성하고 init 전에 VIP 를 띄운다.
+#        (이미 외부 LB/VIP 가 있으면: loadbalancers 그룹을 통째로 지우고
+#         install_kubernetes_control_plane_endpoint 에 그 주소를 넣으면 된다.)
+#
+# 실행 : ansible-playbook -i inventory/ha-cluster-ssh.yml install-kubernetes-playbook.yml
+
+all:
+  vars:
+    # keepalived 가 띄울 가상 IP (control plane 서브넷 내 미사용 IP 여야 함).
+    install_kubernetes_vip: "<VIP_ADDRESS>"          # 예: 10.0.1.100
+    # control_plane_endpoint 는 비워둔다 → role 이 VIP 를 apiserver 엔드포인트로 사용.
+    install_kubernetes_control_plane_endpoint: ""
+
+    # --- 공통 접속 설정 (전 노드 동일) ---
+    ansible_user: ubuntu
+    ansible_port: 22
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_become: true
+    ansible_become_method: sudo
+    ansible_become_user: root
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+  children:
+    control_plane:
+      hosts:
+        master-1: { ansible_host: "<MASTER_1_IP>" }
+        master-2: { ansible_host: "<MASTER_2_IP>" }
+        master-3: { ansible_host: "<MASTER_3_IP>" }
+
+    worker_nodes:
+      hosts:
+        worker-1: { ansible_host: "<WORKER_1_IP>" }
+        worker-2: { ansible_host: "<WORKER_2_IP>" }
+
+    # HAProxy+Keepalived 전용 LB 노드 2대. VIP 를 VRRP 로 공유한다.
+    # keepalived_priority 가 가장 큰 노드가 MASTER(=VIP 보유), 나머지는 BACKUP.
+    # (apiserver 6443 과 포트가 겹치므로 LB 는 CP 와 분리된 별도 노드로 둘 것.)
+    loadbalancers:
+      hosts:
+        lb-1:
+          ansible_host: "<LB_1_IP>"
+          keepalived_priority: 101
+        lb-2:
+          ansible_host: "<LB_2_IP>"
+          keepalived_priority: 100

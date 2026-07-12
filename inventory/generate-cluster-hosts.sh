@@ -1,5 +1,5 @@
 #!/bin/bash
-# terraform output을 읽어 cluster-hosts.yml을 생성한다 (v3: 전 노드 Private + SSM 접근).
+# terraform output을 읽어 ha-cluster-ssm.yml을 생성한다 (v3: 전 노드 Private + SSM 접근).
 #
 # v2와의 차이:
 #   - 노드가 모두 Private Subnet에 있고 공인 IP가 없다. control-plane bastion(ProxyJump)도 없다.
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 TERRAFORM_DIR="${TERRAFORM_DIR:-$HOME/terraform/templates}"
-OUTPUT_FILE="$(cd "$(dirname "$0")" && pwd)/cluster-hosts.yml"
+OUTPUT_FILE="$(cd "$(dirname "$0")" && pwd)/ha-cluster-ssm.yml"
 SSH_KEY="${SSH_KEY:-~/.ssh/terraform-key}"
 
 # SSM start-session에 넘길 리전. 환경변수/aws config에서 찾고, 없으면 기본값.
@@ -93,6 +93,6 @@ echo "$WORKER_IDS" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r 
   emit_host "$name" "$id"
 done
 
-echo "cluster-hosts.yml 생성 완료: $OUTPUT_FILE"
+echo "ha-cluster-ssm.yml 생성 완료: $OUTPUT_FILE"
 echo "  control_plane_endpoint = ${CP_ENDPOINT}"
 echo "  ssh_user               = ${SSH_USER}  /  region = ${REGION}"

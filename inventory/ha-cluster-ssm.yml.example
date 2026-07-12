@@ -1,0 +1,40 @@
+---
+# HA 클러스터 인벤토리 — SSM 접속판 (전 노드 Private, Terraform 프로비저닝 전제)
+# ---------------------------------------------------------------------------
+# generate-cluster-hosts.sh 가 실제 값을 채워 inventory/ha-cluster-ssm.yml 로
+# 출력하는 것과 동일한 구조다. 이 파일은 민감정보(인스턴스 ID·NLB DNS·리전)를
+# <...> 플레이스홀더로 가린 템플릿이므로, 실행 전 terraform output 값으로 교체할 것.
+#
+# 접속 : 모든 노드가 Private. AWS SSM Session Manager ProxyCommand 로 SSH 터널링.
+#        전제 - 로컬에 AWS 자격증명/리전 설정, session-manager-plugin 설치,
+#               각 인스턴스에 SSM Agent + SSM 접근 IAM 역할.
+# HA   : apiserver 단일 엔드포인트로 내부 NLB(control_plane_endpoint)를 사용.
+#        → keepalived/HAProxy(lb.yml)·loadbalancers 그룹은 쓰지 않는다.
+#
+# 실행 : ansible-playbook -i inventory/ha-cluster-ssm.yml install-kubernetes-playbook.yml
+
+all:
+  vars:
+    # 내부 NLB DNS (terraform output). apiserver HA 단일 엔드포인트.
+    install_kubernetes_control_plane_endpoint: "<K8S_APISERVER_NLB_DNS>"   # 예: k8s-apiserver-nlb-xxxxxxxxxxxx.elb.ap-northeast-2.amazonaws.com
+
+    # --- 공통 접속 설정 (전 노드 동일) ---
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ~/.ssh/terraform-key
+    ansible_become: true
+    ansible_become_method: sudo
+    ansible_become_user: root
+    # SSM ProxyCommand — %h=인스턴스ID, %p=포트. <AWS_REGION> 을 실제 리전으로 교체.
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region <AWS_REGION>"'
+
+  children:
+    control_plane:
+      hosts:
+        master-1: { ansible_host: "<MASTER_1_INSTANCE_ID>" }   # i-xxxxxxxxxxxxxxxxx
+        master-2: { ansible_host: "<MASTER_2_INSTANCE_ID>" }
+        master-3: { ansible_host: "<MASTER_3_INSTANCE_ID>" }
+
+    worker_nodes:
+      hosts:
+        worker-1: { ansible_host: "<WORKER_1_INSTANCE_ID>" }
+        worker-2: { ansible_host: "<WORKER_2_INSTANCE_ID>" }

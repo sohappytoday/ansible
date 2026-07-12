@@ -80,7 +80,7 @@ SAN에 `127.0.0.1`을 포함시킨다(`--apiserver-cert-extra-sans 127.0.0.1`). 
 ansible/
 ├── CLAUDE.md
 ├── inventory/
-│   ├── cluster-hosts.yml          # generate 스크립트가 자동 생성 (SSM/instance ID)
+│   ├── ha-cluster-ssm.yml          # generate 스크립트가 자동 생성 (SSM/instance ID)
 │   ├── generate-cluster-hosts.sh  # terraform output → 인벤토리 (SSM ProxyCommand)
 │   └── group_vars/all.yml         # 정적 구성(cp_count, version, cri, cni 등)
 ├── install-kubernetes-playbook.yml
@@ -147,7 +147,7 @@ worker (인터넷 X)
 
 ## Inventory 형식 (v3)
 
-`inventory/cluster-hosts.yml` (generate-cluster-hosts.sh로 자동 생성):
+`inventory/ha-cluster-ssm.yml` (generate-cluster-hosts.sh로 자동 생성):
 
 ```yaml
 all:
@@ -170,7 +170,7 @@ all:
 ```
 
 > 정적 구성(cp_count, version, cri/cni 등)은 `inventory/group_vars/all.yml`에 둔다.
-> `cluster-hosts.yml`은 generate 스크립트가 매번 덮어쓰므로 그곳의 vars는 동적 값
+> `ha-cluster-ssm.yml`은 generate 스크립트가 매번 덮어쓰므로 그곳의 vars는 동적 값
 > (control_plane_endpoint)만 둔다. 전 노드 동일하게 SSM ProxyCommand로 접근한다.
 
 ---

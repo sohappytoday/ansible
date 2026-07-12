@@ -1,6 +1,6 @@
 ---
 # install_kubernetes 기본 변수
-# inventory/cluster-hosts.yml vars 섹션에서 오버라이드
+# inventory/ha-cluster-ssm.yml vars 섹션에서 오버라이드
 
 # 노드 구성
 install_kubernetes_cp_count: 1       # 1(단순) 또는 3 이상 홀수(HA)
@@ -40,7 +40,7 @@ install_kubernetes_cilium_version: ""   # 예 "1.16.5" (비우면 최신 차트)
 #   - AWS 등 클라우드: 내부 NLB의 DNS 이름을 control_plane_endpoint로 지정(권장).
 #     keepalived/HAProxy(lb.yml)는 사용하지 않는다.
 #   - 온프렘: vip + loadbalancers 그룹으로 keepalived/HAProxy 사용.
-# inventory/cluster-hosts.yml(generate-cluster-hosts.sh가 생성)에서 자동 주입됨.
+# inventory/ha-cluster-ssm.yml(generate-cluster-hosts.sh가 생성)에서 자동 주입됨.
 install_kubernetes_control_plane_endpoint: ""
 install_kubernetes_vip: ""           # cp_count >= 3 + 온프렘 keepalived 사용 시 설정
 install_kubernetes_apiserver_port: 6443         # apiserver / 엔드포인트 포트

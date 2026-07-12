@@ -34,25 +34,25 @@ cd ~/terraform/templates && terraform apply --var-file=control-plane.tfvars --va
 ./inventory/generate-cluster-hosts.sh
 ```
 
-`inventory/cluster-hosts.yml`에 새 노드가 추가되었는지 확인.
+`inventory/ha-cluster-ssm.yml`에 새 노드가 추가되었는지 확인.
 
 ### 3단계: 새 노드만 대상으로 실행
 
 **Worker 추가:**
 ```bash
 ansible-playbook playbooks/k8s-node-add.yml \
-  -i inventory/cluster-hosts.yml \
+  -i inventory/ha-cluster-ssm.yml \
   --limit <node-name>
 ```
 
 **Control Plane 추가 (주의: etcd 쿼럼 영향):**
 ```bash
 # 기존 CP 노드에서 join 명령 생성
-ansible control_planes[0] -i inventory/cluster-hosts.yml \
+ansible control_planes[0] -i inventory/ha-cluster-ssm.yml \
   -a "kubeadm token create --print-join-command --control-plane"
 
 ansible-playbook playbooks/k8s-node-add.yml \
-  -i inventory/cluster-hosts.yml \
+  -i inventory/ha-cluster-ssm.yml \
   --limit <new-cp-name> \
   -e node_type=control-plane
 ```
