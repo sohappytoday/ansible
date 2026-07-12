@@ -1,6 +1,6 @@
 ---
 name: k8s-setup
-description: 신규 Kubernetes HA 클러스터를 처음부터 구축한다. K8s 버전, CRI, CNI를 대화형으로 선택한 뒤 Terraform VM 프로비저닝 → 인벤토리 생성 → K8s 설치 전 파이프라인을 단계별로 안내한다.
+description: Kubernetes HA 클러스터 구축의 수동 단계별 절차 참조 문서. 자동 오케스트레이션(설계→실행→검증, 승인 게이트 포함)은 /k8s-build를 쓰고, 이 스킬은 각 단계(구성 선택 → Terraform → 인벤토리 → Ansible)를 손으로 확인·실행할 때 참조한다.
 argument-hint: "[단계명] config|terraform|inventory|k8s|all (기본값: all)"
 ---
 

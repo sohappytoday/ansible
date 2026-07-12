@@ -7,3 +7,5 @@ inventory/ha-cluster-ssm.yml
 inventory/ha-cluster-ssh.yml
 make_xlsx.py
 output/
+# make-workflow 등 스킬의 중간 산출물(scratch)
+_workspace/

@@ -9,7 +9,7 @@ if echo "$PROMPT" | grep -qiE '(k8s.*(setup|구축|install|설치|만들|build)|
   jq -n '{
     "hookSpecificOutput": {
       "hookEventName": "UserPromptSubmit",
-      "additionalContext": "[K8s 클러스터 구축] /k8s-setup 스킬을 사용하면 K8s 버전(1.24+), CRI(containerd/crio), CNI(calico/flannel/cilium)를 단계별로 선택하고 Terraform → 인벤토리 → Ansible 전 파이프라인을 진행할 수 있습니다."
+      "additionalContext": "[K8s 클러스터 구축] /k8s-build 스킬(서브에이전트 팀: k8s-architect 설계 → k8s-executor 실행 → k8s-verifier 검증)을 사용하면 K8s 버전(1.24+)·CRI(containerd/crio)·CNI(calico/flannel/cilium)를 선택하고, 설치조건 확정과 terraform apply 두 승인 게이트를 거쳐 Terraform → 인벤토리 → Ansible 전 파이프라인을 진행할 수 있습니다. /k8s-build는 disable-model-invocation이라 사용자가 명시 호출해야 하니, 사용자에게 /k8s-build 실행을 안내하세요. 수동 단계별 절차 참조가 필요하면 /k8s-setup을 봅니다."
     }
   }'
   exit 0
